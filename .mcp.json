@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "七牛云大模型推理服务 - API 文档": {
+      "type": "stdio",
+      "command": "npx",
+      "args": [
+        "-y",
+        "apifox-mcp-server@latest",
+        "--site-id=5482451"
+      ]
+    }
+  }
+}
