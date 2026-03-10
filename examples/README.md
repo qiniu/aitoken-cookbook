@@ -9,6 +9,8 @@ examples/
 ├── python/
 │   ├── fal-client-sdk/          # fal-client-sdk 示例（队列模式）
 │   └── openai-sdk/          # openai-sdk 示例（Chat Completions 接口）
+├── go/
+│   └── openai-sdk/          # openai-go-sdk 示例（Chat Completions 接口）
 ├── javascript/
 │   ├── fal-ai-sdk/
 │   └── openai-sdk/
@@ -33,9 +35,20 @@ examples/
 
 ## Python — openai-sdk
 
-适用于 DeepSeek、Qwen 等兼容 OpenAI 接口的模型。
+适用于 Gemini、DeepSeek、Qwen 等兼容 OpenAI 接口的模型。
 
-> 即将推出
+| 示例 | 模型 | 说明 |
+|------|------|------|
+| [gemini_3_pro_image_generation.ipynb](python/openai-sdk/gemini_3_pro_image_generation.ipynb) | Gemini 3.0 Pro Image | 文生图、图生图（单图/多图编辑） |
+| [gemini_file_understanding.ipynb](python/openai-sdk/gemini_file_understanding.ipynb) | Gemini 3.0 Pro | 大文件上传 + 多模态理解（文件上传 → 轮询就绪 → Chat Completions） |
+
+## Go — openai-sdk
+
+适用于 Gemini 等兼容 OpenAI 接口的模型，使用 [openai-go](https://github.com/openai/openai-go) SDK。
+
+| 示例 | 模型 | 说明 |
+|------|------|------|
+| [gemini_file_understanding](go/openai-sdk/gemini_file_understanding/) | Gemini 3.0 Pro | 大文件上传 + 视频理解（文件上传 → 轮询就绪 → Chat Completions） |
 
 ## JavaScript — fal-ai-sdk
 
