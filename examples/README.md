@@ -7,7 +7,8 @@
 ```
 examples/
 ├── python/
-│   ├── fal-client-sdk/          # fal-client-sdk 示例（队列模式）
+│   ├── claude-agent-sdk/    # Claude Agent SDK 示例（Anthropic Messages API）
+│   ├── fal-client-sdk/      # fal-client-sdk 示例（队列模式）
 │   └── openai-sdk/          # openai-sdk 示例（Chat Completions 接口）
 ├── go/
 │   └── openai-sdk/          # openai-go-sdk 示例（Chat Completions 接口）
@@ -41,6 +42,14 @@ examples/
 |------|------|------|
 | [gemini_3_pro_image_generation.ipynb](python/openai-sdk/gemini_3_pro_image_generation.ipynb) | Gemini 3.0 Pro Image | 文生图、图生图（单图/多图编辑） |
 | [gemini_file_understanding.ipynb](python/openai-sdk/gemini_file_understanding.ipynb) | Gemini 3.0 Pro | 大文件上传 + 多模态理解（文件上传 → 轮询就绪 → Chat Completions） |
+
+## Python — claude-agent-sdk
+
+适用于通过 Anthropic Messages API 接入的 Claude 系列模型，使用 [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk-python) 构建 AI Agent 应用。
+
+| 示例 | 模型 | 说明 |
+|------|------|------|
+| [claude_agent_sdk_basic.ipynb](python/claude-agent-sdk/claude_agent_sdk_basic.ipynb) | Claude 4.6 Sonnet | Agent SDK 基础用法：一次性查询、自定义工具、多轮对话 |
 
 ## Go — openai-sdk
 
