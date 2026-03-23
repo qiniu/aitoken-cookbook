@@ -7,6 +7,7 @@
 ```
 examples/
 ├── python/
+│   ├── anthropic-sdk/       # Anthropic Python SDK 示例（Messages API 直接调用）
 │   ├── claude-agent-sdk/    # Claude Agent SDK 示例（Anthropic Messages API）
 │   ├── fal-client-sdk/      # fal-client-sdk 示例（队列模式）
 │   └── openai-sdk/          # openai-sdk 示例（Chat Completions 接口）
@@ -50,6 +51,15 @@ examples/
 | 示例 | 模型 | 说明 |
 |------|------|------|
 | [claude_agent_sdk_basic.ipynb](python/claude-agent-sdk/claude_agent_sdk_basic.ipynb) | Claude 4.6 Sonnet | Agent SDK 基础用法：一次性查询、自定义工具、多轮对话 |
+| [claude_image_understanding.ipynb](python/claude-agent-sdk/claude_image_understanding.ipynb) | Claude 4.6 Sonnet | 图片理解：通过 Agent SDK 的 Read 工具读取本地图片并分析 |
+
+## Python — anthropic-sdk
+
+适用于通过 Anthropic Messages API 接入的 Claude 系列模型，使用 [Anthropic Python SDK](https://github.com/anthropics/anthropic-sdk-python) 直接调用。
+
+| 示例 | 模型 | 说明 |
+|------|------|------|
+| [claude_image_understanding.ipynb](python/anthropic-sdk/claude_image_understanding.ipynb) | Claude 4.6 Sonnet | 图片理解：通过 Base64 编码传入本地图片，调用 Messages API 分析 |
 
 ## Go — openai-sdk
 
