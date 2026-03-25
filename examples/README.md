@@ -10,6 +10,7 @@ examples/
 │   ├── anthropic-sdk/       # Anthropic Python SDK 示例（Messages API 直接调用）
 │   ├── claude-agent-sdk/    # Claude Agent SDK 示例（Anthropic Messages API）
 │   ├── fal-client-sdk/      # fal-client-sdk 示例（队列模式）
+│   ├── genai-sdk/           # Google GenAI SDK 示例（Vertex AI 协议）
 │   └── openai-sdk/          # openai-sdk 示例（Chat Completions 接口）
 ├── go/
 │   └── openai-sdk/          # openai-go-sdk 示例（Chat Completions 接口）
@@ -34,6 +35,14 @@ examples/
 | 示例 | 模型 | 说明 |
 |------|------|------|
 | [kling_o1_image.ipynb](python/fal-client-sdk/kling_o1_image.ipynb) | Kling O1 Image | 图生图：风格迁移、图像编辑、多图参考 |
+
+## Python — genai-sdk
+
+适用于 Gemini 系列模型，使用 [Google GenAI SDK](https://googleapis.github.io/python-genai/) 通过 Vertex AI 协议调用。
+
+| 示例 | 模型 | 说明 |
+|------|------|------|
+| [gemini_basic.ipynb](python/genai-sdk/gemini_basic.ipynb) | Gemini 3.0 Pro | 基础用法：流式/非流式生成、系统指令、多轮对话 |
 
 ## Python — openai-sdk
 
