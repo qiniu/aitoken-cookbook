@@ -43,6 +43,7 @@ examples/
 | 示例 | 模型 | 说明 |
 |------|------|------|
 | [gemini_basic.ipynb](python/genai-sdk/gemini_basic.ipynb) | Gemini 3.0 Pro | 基础用法：流式/非流式生成、系统指令、多轮对话 |
+| [gemini_image_generation.ipynb](python/genai-sdk/gemini_image_generation.ipynb) | Gemini 3.1 Flash Image | 图片生成：文生图、图生图（单图/多图编辑） |
 
 ## Python — openai-sdk
 
@@ -68,6 +69,7 @@ examples/
 
 | 示例 | 模型 | 说明 |
 |------|------|------|
+| [claude_basic.ipynb](python/anthropic-sdk/claude_basic.ipynb) | Claude 4.6 Sonnet | 基础用法：非流式/流式生成、系统提示词、多轮对话、参数调整 |
 | [claude_image_understanding.ipynb](python/anthropic-sdk/claude_image_understanding.ipynb) | Claude 4.6 Sonnet | 图片理解：通过 Base64 编码传入本地图片，调用 Messages API 分析 |
 
 ## Go — openai-sdk
