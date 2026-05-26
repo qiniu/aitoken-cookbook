@@ -42,6 +42,8 @@ examples/
 | [kling_o1_image.ipynb](python/fal-client-sdk/kling_o1_image.ipynb) | Kling O1 Image | 图生图：风格迁移、图像编辑、多图参考 |
 | [veo_3.1_fast_image_to_video.ipynb](python/fal-client-sdk/veo_3.1_fast_image_to_video.ipynb) | Veo 3.1 Fast | 图生视频：基于起始帧 + 提示词生成视频，可同步生成音频 |
 | [veo_3.1_fast_first_last_frame_to_video.ipynb](python/fal-client-sdk/veo_3.1_fast_first_last_frame_to_video.ipynb) | Veo 3.1 Fast | 首尾帧生视频：基于首帧和尾帧图片生成平滑过渡视频 |
+| [vidu_q3_reference_to_video.ipynb](python/fal-client-sdk/vidu_q3_reference_to_video.ipynb) | Vidu Q3 Reference-to-Video | 参考生视频：支持 1-7 张参考图片，时长 3-16 秒 |
+| [vidu_q3_turbo_reference_to_video.ipynb](python/fal-client-sdk/vidu_q3_turbo_reference_to_video.ipynb) | Vidu Q3 Turbo Reference-to-Video | 参考生视频 Turbo：快速生成，支持 1-7 张参考图片 |
 
 ## Python — genai-sdk
 
