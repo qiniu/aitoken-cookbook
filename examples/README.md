@@ -40,6 +40,8 @@ examples/
 | 示例 | 模型 | 说明 |
 |------|------|------|
 | [kling_o1_image.ipynb](python/fal-client-sdk/kling_o1_image.ipynb) | Kling O1 Image | 图生图：风格迁移、图像编辑、多图参考 |
+| [veo_3.1_fast_image_to_video.ipynb](python/fal-client-sdk/veo_3.1_fast_image_to_video.ipynb) | Veo 3.1 Fast | 图生视频：基于起始帧 + 提示词生成视频，可同步生成音频 |
+| [veo_3.1_fast_first_last_frame_to_video.ipynb](python/fal-client-sdk/veo_3.1_fast_first_last_frame_to_video.ipynb) | Veo 3.1 Fast | 首尾帧生视频：基于首帧和尾帧图片生成平滑过渡视频 |
 
 ## Python — genai-sdk
 
