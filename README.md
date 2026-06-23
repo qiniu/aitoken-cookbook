@@ -10,4 +10,9 @@ export QINIU_API_KEY="your-api-key"
 
 大多数代码示例是用Python编写的，尽管这些概念可以应用于任何语言。
 
+## 目录
+
+- [examples/](examples/) — API 调用示例，按语言和 SDK 分类
+- [test-cases/](test-cases/) — 模型接入测试用例，批量执行并输出结构化结果
+
 更多信息请参阅 [AIToken 文档](https://developer.qiniu.com/aitokenapi) 和 [API 参考](https://apidocs.qnaigc.com)。
