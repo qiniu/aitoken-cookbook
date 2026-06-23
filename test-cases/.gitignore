@@ -1,0 +1,9 @@
+# 运行结果输出目录，不纳入版本控制
+*/reports/
+
+# Python 缓存
+__pycache__/
+*.pyc
+
+# macOS 系统文件
+.DS_Store
