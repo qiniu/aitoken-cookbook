@@ -1,6 +1,9 @@
 # Test Cases
 
-模型接入 API 测试用例集，按模型分目录组织。每个目录包含一组可执行的测试 case，用于验证接口行为是否符合预期。
+模型接口兼容性测试用例集，按模型分目录组织。
+
+这些用例是对接口行为的契约定义（请求 + 断言 + 预期值）。把接口地址指向被测服务，
+运行用例即可测试该接口，并生成结构化报告。
 
 ## 目录结构
 
@@ -10,7 +13,13 @@ test-cases/
 ├── _shared/                 # 公共工具
 │   ├── report.py            # 报告模块：统一结果格式，一次产出 json/md/html
 │   └── gpt_image_2_token_calculator.py  # gpt-image-2 输出 token 计算工具
-└── <model-name>/            # 按模型分目录，例如 kling、vidu
+├── gpt-image-2/             # gpt-image-2 输出 token 校验测试（generations + edits）
+│   ├── README.md            # 该模型的测试说明
+│   ├── cases.yaml           # 用例定义
+│   ├── run_tests.py         # 执行入口
+│   ├── fixtures/            # 测试素材（edits 端点的输入图片）
+│   └── reports/             # 运行结果输出目录（git 忽略）
+└── <model-name>/            # 其余模型按相同结构组织
     ├── README.md            # 该模型的测试说明
     ├── cases.yaml           # 用例定义
     ├── run_tests.py         # 执行入口
@@ -23,18 +32,21 @@ test-cases/
 | 目录 | 用途 |
 |------|------|
 | [examples/](../examples/) | 面向开发者的 API 调用示例，帮助快速上手 |
-| `test-cases/` | 面向接入方的测试用例，批量执行并输出结构化结果 |
+| `test-cases/` | 接口兼容性测试用例，批量执行并输出结构化结果 |
 
-可参考 `examples/` 中的实现编写测试脚本，但此处强调**可批量运行、有明确通过标准、可导出报告**。
+可参考 `examples/` 中的实现，但此处强调**可批量运行、有明确通过标准、可导出报告**。
 
 ## 前置条件
 
-1. 获取测试环境的 API Key
-2. 设置环境变量：
+1. 准备好被测接口的地址与鉴权密钥
+2. 设置环境变量（指向被测服务）：
    ```bash
-   export QINIU_API_KEY="your-api-key"
+   export API_BASE_URL="https://your-domain.com/v1"
+   export API_KEY="your-api-key"
    ```
 3. 安装依赖（各模型目录的 README 中会说明具体依赖）
+
+> 具体环境变量以各模型目录的 README 为准。
 
 ## 如何运行
 
@@ -84,11 +96,11 @@ cases = [CaseResult(id="low_1024", name="low 1024x1024",
 Report(model="gpt-image-2", cases=cases).write("reports")
 ```
 
-## 如何提交结果
+## 结果提交
 
 1. 运行全部 case
-2. 将 `reports/` 下的结果文件（`report.json` / `report.md` / `report.html`，及必要的截图、日志）打包发送
-3. 如有 case 失败，附上失败 case 的 ID 和错误信息
+2. 将 `reports/` 下的结果文件（`report.json` / `report.md` / `report.html`，及必要的截图、日志）打包提交
+3. 如有 case 失败，附上失败 case 的 ID 和 `error` 信息
 
 ## 公共工具（_shared/）
 

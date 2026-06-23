@@ -1,0 +1,129 @@
+# gpt-image-2 测试用例定义
+#
+# 每个 case 声明请求参数（endpoint / quality / size）与校验项（checks）。
+# output_tokens 的预期值不写死，由 run_tests.py 调用
+# _shared/gpt_image_2_token_calculator.py 按 quality + size 动态算出，
+# 再与接口返回的 usage.output_tokens 比对。
+#
+# endpoint 取值（默认 generations）：
+#   generations  文生图 POST /v1/images/generations（JSON 请求）
+#   edits        图生图 POST /v1/images/edits（multipart/form-data，需上传输入图片）
+#
+# edits 用例需指定输入图片 image（相对本目录的路径），默认见 fixtures/input.png。
+#
+# 可用的 checks（含义见 run_tests.py）：
+#   status_200          HTTP 状态码为 200
+#   data_exists         响应 data 字段存在且非空
+#   usage_exists        usage.input_tokens / usage.output_tokens 均存在
+#   output_tokens_typed usage.output_tokens 为数字类型
+#   output_tokens_exact usage.output_tokens 等于计算器算出的预期值
+#   size_echo           响应 size 与请求 size 一致
+#   quality_echo        响应 quality 与请求 quality 一致
+
+# 文生图（generations）默认提示词
+prompt: "生成一只小猫在草地上"
+# 图生图（edits）默认编辑指令
+edit_prompt: "把背景改成蓝色"
+# 图生图（edits）默认输入图片（相对本目录）
+edit_image: fixtures/input.png
+
+cases:
+  # ---------- generations：文生图 ----------
+  - id: gen_connectivity_basic
+    name: generations 基础连通性（low 1024x1024）
+    endpoint: generations
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, data_exists, usage_exists]
+
+  - id: gen_size_echo_1024
+    name: generations size 参数回显（1024x1024）
+    endpoint: generations
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, size_echo, data_exists]
+
+  - id: gen_quality_echo_low
+    name: generations quality 参数回显（low）
+    endpoint: generations
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, quality_echo, data_exists]
+
+  - id: gen_quality_echo_high
+    name: generations quality 参数回显（high）
+    endpoint: generations
+    quality: high
+    size: "1024x1024"
+    checks: [status_200, quality_echo, data_exists]
+
+  - id: gen_tokens_low_1024
+    name: generations output_tokens 精确校验（low 1024x1024，预期 196）
+    endpoint: generations
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+
+  - id: gen_tokens_medium_1024
+    name: generations output_tokens 精确校验（medium 1024x1024，预期 1756）
+    endpoint: generations
+    quality: medium
+    size: "1024x1024"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+
+  - id: gen_tokens_high_1024
+    name: generations output_tokens 精确校验（high 1024x1024，预期 7024）
+    endpoint: generations
+    quality: high
+    size: "1024x1024"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+
+  # ---------- edits：图生图 ----------
+  - id: edit_connectivity_basic
+    name: edits 基础连通性（low 1024x1024）
+    endpoint: edits
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, data_exists, usage_exists]
+
+  - id: edit_size_echo_1024
+    name: edits size 参数回显（1024x1024）
+    endpoint: edits
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, size_echo, data_exists]
+
+  - id: edit_quality_echo_low
+    name: edits quality 参数回显（low）
+    endpoint: edits
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, quality_echo, data_exists]
+
+  - id: edit_quality_echo_high
+    name: edits quality 参数回显（high）
+    endpoint: edits
+    quality: high
+    size: "1024x1024"
+    checks: [status_200, quality_echo, data_exists]
+
+  - id: edit_tokens_low_1024
+    name: edits output_tokens 精确校验（low 1024x1024，预期 196）
+    endpoint: edits
+    quality: low
+    size: "1024x1024"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+
+  - id: edit_tokens_medium_1024
+    name: edits output_tokens 精确校验（medium 1024x1024，预期 1756）
+    endpoint: edits
+    quality: medium
+    size: "1024x1024"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+
+  - id: edit_tokens_high_1024
+    name: edits output_tokens 精确校验（high 1024x1024，预期 7024）
+    endpoint: edits
+    quality: high
+    size: "1024x1024"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
