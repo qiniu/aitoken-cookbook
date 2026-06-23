@@ -7,7 +7,8 @@
 ```
 test-cases/
 ├── README.md
-├── _shared/                 # 公共工具（runner、结果格式等，按需添加）
+├── _shared/                 # 公共工具
+│   ├── report.py            # 报告模块：统一结果格式，一次产出 json/md/html
 │   └── gpt_image_2_token_calculator.py  # gpt-image-2 输出 token 计算工具
 └── <model-name>/            # 按模型分目录，例如 kling、vidu
     ├── README.md            # 该模型的测试说明
@@ -44,12 +45,49 @@ cd test-cases/<model-name>
 python run_tests.py
 ```
 
-运行完成后，结果会输出到 `reports/` 目录（如 `report.json`）。
+运行完成后，结果会输出到 `reports/` 目录，每次运行同时产出三种格式（见下文）。
+
+## 结果格式
+
+所有模型统一复用 [_shared/report.py](_shared/report.py)，遵循 **「固定骨架 + 自由 details」** 的设计：公共逻辑只依赖每个 case 的固定元字段，模型特有数据放进自由的 `details`，互不干扰。
+
+每次运行在 `reports/` 下生成三份报告：
+
+| 文件 | 面向 | 说明 |
+|------|------|------|
+| `report.json` | 代码 / 机器 | 唯一事实源，便于程序解析与 diff |
+| `report.md`   | 人类速览 | GitHub / 编辑器里直接看的表格 |
+| `report.html` | 人类富展示 | 自包含页面；`details` 中的图片 / 视频 URL 自动内嵌预览 |
+
+JSON 顶层固定为 `model` / `summary` / `cases`；每个 case 的固定字段：
+
+| 字段 | 含义 |
+|------|------|
+| `id` | 用例唯一标识 |
+| `name` | 可读名称 |
+| `status` | `pass` / `fail` / `error` |
+| `expected` | 期望值 |
+| `actual` | 实际值 |
+| `error` | 执行报错信息（仅 error 状态） |
+| `duration_ms` | 耗时（毫秒） |
+| `details` | 模型自定义数据（请求参数、媒体 URL、原始响应片段等） |
+
+模型的 `run_tests.py` 只需收集 `CaseResult` 列表，构造 `Report` 后调用 `report.write(out_dir)` 即可：
+
+```python
+import sys
+sys.path.insert(0, "../_shared")
+from report import CaseResult, Report
+
+cases = [CaseResult(id="low_1024", name="low 1024x1024",
+                    status="pass", expected=255, actual=255)]
+Report(model="gpt-image-2", cases=cases).write("reports")
+```
 
 ## 如何提交结果
 
 1. 运行全部 case
-2. 将 `reports/` 下的结果文件（及必要的截图、日志）打包发送
+2. 将 `reports/` 下的结果文件（`report.json` / `report.md` / `report.html`，及必要的截图、日志）打包发送
 3. 如有 case 失败，附上失败 case 的 ID 和错误信息
 
 ## 公共工具（_shared/）
