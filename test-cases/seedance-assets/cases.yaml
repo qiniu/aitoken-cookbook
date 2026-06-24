@@ -95,8 +95,10 @@ steps:
     name: 查询素材（ListAssets，按 GroupIds + Statuses）
     action: ListAssets
     body:
-      # 火山 Filter：GroupIds 为数组；Statuses 支持 Active/Processing/Failed
+      # 火山 Filter：GroupType 必填（素材资产为 AIGC）；GroupIds 为数组；
+      # Statuses 支持 Active/Processing/Failed
       Filter:
+        GroupType: "AIGC"
         GroupIds: ["${group_id}"]
         Statuses: ["Active", "Processing"]
       PageNumber: 1
@@ -110,13 +112,37 @@ steps:
     name: 查询素材组合（ListAssetGroups）
     action: ListAssetGroups
     body:
+      # Filter：GroupType 必填（素材资产为 AIGC）；GroupIds 为数组
       Filter:
+        GroupType: "AIGC"
         GroupIds: ["${group_id}"]
       PageNumber: 1
       PageSize: 10
       # ProjectName 必传：不传时默认按 project/* 鉴权，AK/SK 无通配权限会 403
       ProjectName: "${project_name}"
     result_schema: result_list_asset_groups.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  # ---------- 更新接口 ----------
+  - id: update_asset
+    name: 更新素材名称（UpdateAsset）
+    action: UpdateAsset
+    body:
+      Id: "${asset_id}"
+      Name: "test_asset_image_renamed"
+      ProjectName: "${project_name}"
+    result_schema: result_id.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  - id: update_asset_group
+    name: 更新素材组名称与描述（UpdateAssetGroup）
+    action: UpdateAssetGroup
+    body:
+      Id: "${group_id}"
+      Name: "test_figure_group_renamed"
+      Description: "test-cases 自动化更新后的素材组"
+      ProjectName: "${project_name}"
+    result_schema: result_id.schema.json
     checks: [http_2xx, envelope, no_error, result_schema]
 
   # ---------- 真人人像：可自动化部分 ----------
@@ -137,3 +163,23 @@ steps:
       Id: "asset-does-not-exist-00000000"
       ProjectName: "${project_name}"
     checks: [error_schema]
+
+  # ---------- 删除接口（放最后，顺带清理本次创建的资源）----------
+  # 删除有先后：先删素材，再删空的素材组。Result 为空对象 {}。
+  - id: delete_asset
+    name: 删除素材（DeleteAsset）
+    action: DeleteAsset
+    body:
+      Id: "${asset_id}"
+      ProjectName: "${project_name}"
+    result_schema: result_empty.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  - id: delete_asset_group
+    name: 删除素材组（DeleteAssetGroup）
+    action: DeleteAssetGroup
+    body:
+      Id: "${group_id}"
+      ProjectName: "${project_name}"
+    result_schema: result_empty.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]

@@ -415,8 +415,12 @@ def main() -> int:
     # 为避免污染，前置生命周期 step 失败则跳过其依赖项（负向用例与真人会话独立，不跳过）。
     variables: dict = {}
     results: list[CaseResult] = []
-    # 依赖前序产物的 step（需要 group_id / asset_id）
-    depends_on_chain = {"create_asset", "wait_asset_active", "list_assets", "list_asset_groups"}
+    # 依赖前序产物的 step（需要 group_id / asset_id）。
+    # create_liveness_session 与 invalid_get_asset_error 独立，不在此列。
+    depends_on_chain = {
+        "create_asset", "wait_asset_active", "list_assets", "list_asset_groups",
+        "update_asset", "update_asset_group", "delete_asset", "delete_asset_group",
+    }
     chain_broken = False
 
     for step in steps:

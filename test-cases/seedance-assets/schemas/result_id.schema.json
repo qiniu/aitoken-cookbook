@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_id.schema.json",
+  "title": "通用 {Id} 成功 Result",
+  "description": "UpdateAsset / UpdateAssetGroup 等更新接口成功时，Result 回显被更新对象的非空 Id。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["Id"],
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "被更新对象的 ID（素材或素材组）"
+        }
+      }
+    }
+  }
+}

@@ -43,6 +43,8 @@
 | `result_get_asset.schema.json` | GetAsset 的 `Result`（`Status` enum 等） |
 | `result_list_assets.schema.json` | ListAssets 的 `Result`（`Items`/分页） |
 | `result_list_asset_groups.schema.json` | ListAssetGroups 的 `Result` |
+| `result_id.schema.json` | UpdateAsset / UpdateAssetGroup 的 `Result`（回显非空 `Id`） |
+| `result_empty.schema.json` | DeleteAsset / DeleteAssetGroup 的 `Result`（空对象 `{}`） |
 | `result_create_visual_validate_session.schema.json` | CreateVisualValidateSession 的 `Result`（`BytedToken`/`H5Link`） |
 
 可用的 check（含义见 [run_tests.py](run_tests.py)）：
@@ -65,12 +67,18 @@
 1. `CreateAssetGroup` 建组 → 捕获 `group_id`
 2. `CreateAsset`（传 `group_id` + 图片 URL + `AssetType=Image`）→ 捕获 `asset_id`
 3. `GetAsset` 轮询素材状态至 `Status=Active`（异步预处理）
-4. `ListAssets`（按 `group_id` 查）→ 校验 `Items`/分页
+4. `ListAssets`（按 `group_id` + `Statuses` 查）→ 校验 `Items`/分页
 5. `ListAssetGroups` → 校验素材组列表
-6. `CreateVisualValidateSession` 拉起真人认证 H5 会话 → 仅校验返回 `BytedToken`/`H5Link` 格式
-7. 负向用例：用不存在的素材 Id 查 `GetAsset`，校验错误响应格式
+6. `UpdateAsset` 更新素材名称 → 校验回显 `Id`
+7. `UpdateAssetGroup` 更新素材组名称与描述 → 校验回显 `Id`
+8. `CreateVisualValidateSession` 拉起真人认证 H5 会话 → 仅校验返回 `BytedToken`/`H5Link` 格式
+9. 负向用例：用不存在的素材 Id 查 `GetAsset`，校验错误响应格式
+10. `DeleteAsset` 删除素材 → 校验 `Result` 空对象（放最后，顺带清理本次创建的资源）
+11. `DeleteAssetGroup` 删除素材组 → 校验 `Result` 空对象
 
-前置生命周期 step 失败时，依赖它的后续 step 会被跳过（标记 error）。
+删除 step 放在最后，既覆盖删除接口，又顺带清理本次测试创建的素材与素材组，
+避免在被测账号下残留垃圾数据。前置生命周期 step 失败时，依赖它的后续 step
+（含 update/delete）会被跳过（标记 error）。
 
 ### 真人认证的人工步骤（无法自动化）
 
