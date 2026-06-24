@@ -1,0 +1,3 @@
+# test-cases 各模型脚本共用的第三方依赖
+pyyaml       # 解析 cases.yaml 用例定义
+jsonschema   # 校验响应体结构（seedance schemas/）
