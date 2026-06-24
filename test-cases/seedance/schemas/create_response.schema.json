@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance/create_response.schema.json",
+  "title": "Seedance 创建视频生成任务响应",
+  "description": "火山方舟 POST /contents/generations/tasks 的成功响应结构契约：必含非空 id，且不应出现 error。",
+  "type": "object",
+  "required": ["id"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "视频生成任务 ID，创建成功后用于查询任务状态"
+    },
+    "error": {
+      "description": "成功响应不应携带 error；若存在则必须为 null",
+      "type": "null"
+    }
+  }
+}

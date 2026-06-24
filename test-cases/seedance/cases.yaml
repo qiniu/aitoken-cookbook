@@ -1,0 +1,118 @@
+# Seedance 视频生成测试用例定义（火山方舟兼容格式）
+#
+# 校验目标：被测端点的 path、请求体、响应体能完全兼容火山方舟视频生成格式。
+#   创建任务  POST {API_BASE_URL}/contents/generations/tasks   （JSON 请求，返回 {id}）
+#   查询任务  GET  {API_BASE_URL}/contents/generations/tasks/{id}（轮询直到终态）
+#
+# 响应体结构用 schemas/ 下的 JSON Schema 校验（见 run_tests.py）。
+#
+# scenario 取值（决定 content[] 结构）：
+#   text_to_video         文生视频：content=[text]
+#   image_to_video        图生视频-首帧：content=[text, image_url(first_frame)]
+#   start_end_to_video    首尾帧生视频：content=[text, image_url(first_frame), image_url(last_frame)]
+#   multimodal_reference  多模态参考生视频：content=[text, reference_image, reference_video, reference_audio]
+#
+# 可用的 checks（含义见 run_tests.py）：
+#   create_status_200               创建任务 HTTP 200
+#   create_schema                   创建响应通过 create_response.schema.json
+#   query_status_200                查询任务 HTTP 200
+#   query_schema                    查询响应通过 query_response.schema.json（轮询中每次校验）
+#   reached_succeeded               轮询终态为 succeeded
+#   succeeded_schema                终态响应额外满足成功态约束（必有 content.video_url 与 usage）
+#   usage_total_equals_completion   usage.total_tokens == usage.completion_tokens
+#   create_error_status             创建任务返回 4xx（负向用例）
+#   error_schema                    错误响应通过 error_response.schema.json（{error:{code,message,...}}）
+#
+# 单个 case 可用字段覆盖全局：model / resolution / ratio / duration，
+# 以及可选开关 seed / camera_fixed / watermark / generate_audio / return_last_frame。
+
+# ---------- 全局配置 ----------
+
+# 各场景默认提示词
+prompt: "一只橘猫在阳光下的草地上慵懒地打哈欠，镜头缓缓推近"
+
+# 输入素材 URL（图生/首尾帧/多模态参考场景使用）。
+# 默认填火山方舟官方文档示例素材，被测服务需能访问这些公网 URL；
+# 如环境访问不到，可替换为你自己的素材 URL。
+first_frame_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg"
+last_frame_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic2.jpg"
+reference_image_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg"
+reference_video_url: "https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4"
+reference_audio_url: "https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3"
+
+# 默认生成参数（拼到创建请求体顶层；留空则不发送，由服务取默认值）
+resolution: "720p"
+ratio: "16:9"
+duration: 5
+
+# 轮询配置
+poll_interval: 5      # 轮询间隔（秒）
+poll_timeout: 1200    # 单个任务轮询总超时（秒）；首尾帧/多模态等复杂任务生成较慢
+
+cases:
+  # ---------- 文生视频 ----------
+  - id: t2v_basic
+    name: 文生视频 基础连通性（创建 + 查询结构）
+    scenario: text_to_video
+    checks: [create_status_200, create_schema, query_status_200, query_schema]
+
+  - id: t2v_full
+    name: 文生视频 全流程（轮询到成功 + 计费字段）
+    scenario: text_to_video
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- 图生视频-首帧 ----------
+  - id: i2v_first_frame
+    name: 图生视频-首帧 全流程（轮询到成功）
+    scenario: image_to_video
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- 首尾帧生视频 ----------
+  - id: start_end_frames
+    name: 首尾帧生视频 全流程（轮询到成功）
+    scenario: start_end_to_video
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- 多模态参考生视频 ----------
+  - id: multimodal_ref
+    name: 多模态参考生视频 全流程（参考图+视频+音频，轮询到成功）
+    scenario: multimodal_reference
+    # 多模态参考有声视频建议开启音频生成
+    generate_audio: true
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- 负向用例：错误响应格式 ----------
+  - id: invalid_model_error
+    name: 非法模型错误响应格式（应返回 4xx + {error:{code,message}}）
+    scenario: text_to_video
+    # 用一个不存在的模型 ID 触发错误响应，校验错误格式兼容火山
+    model: doubao-seedance-model-does-not-exist
+    checks: [create_error_status, error_schema]

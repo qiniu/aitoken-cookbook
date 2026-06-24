@@ -19,6 +19,12 @@ test-cases/
 │   ├── run_tests.py         # 执行入口
 │   ├── fixtures/            # 测试素材（edits 端点的输入图片）
 │   └── reports/             # 运行结果输出目录（git 忽略）
+├── seedance/                # Seedance 视频生成火山兼容格式测试（创建→轮询→查询）
+│   ├── README.md            # 该模型的测试说明
+│   ├── cases.yaml           # 用例定义（4 场景 + 负向用例）
+│   ├── run_tests.py         # 执行入口（异步：创建任务 + 轮询查询）
+│   ├── schemas/             # 火山格式响应体 JSON Schema（结构契约）
+│   └── reports/             # 运行结果输出目录（git 忽略）
 └── <model-name>/            # 其余模型按相同结构组织
     ├── README.md            # 该模型的测试说明
     ├── cases.yaml           # 用例定义
