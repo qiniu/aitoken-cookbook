@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_list_asset_groups.schema.json",
+  "title": "ListAssetGroups 成功 Result",
+  "description": "查询素材组合成功时，Result 含 Items 数组与分页字段。Items 每项为素材组对象，含 Id/Name/GroupType 等。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["Items", "TotalCount", "PageNumber", "PageSize"],
+      "properties": {
+        "Items": {
+          "type": "array",
+          "description": "素材组合列表",
+          "items": {
+            "type": "object",
+            "required": ["Id"],
+            "properties": {
+              "Id": { "type": "string", "minLength": 1 },
+              "Name": { "type": "string" },
+              "Title": { "type": "string" },
+              "Description": { "type": "string" },
+              "GroupType": { "type": "string" },
+              "ProjectName": { "type": "string" },
+              "CreateTime": { "type": "string" },
+              "UpdateTime": { "type": "string" }
+            }
+          }
+        },
+        "TotalCount": { "type": "integer", "minimum": 0 },
+        "PageNumber": { "type": "integer", "minimum": 1 },
+        "PageSize": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

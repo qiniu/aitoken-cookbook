@@ -27,6 +27,13 @@ test-cases/
 │   ├── run_tests.py         # 执行入口（异步：创建任务 + 轮询查询）
 │   ├── schemas/             # 火山格式响应体 JSON Schema（结构契约）
 │   └── reports/             # 运行结果输出目录（git 忽略）
+├── seedance-assets/         # Seedance 素材资产 API 火山兼容测试（AK/SK 签名 + Action 风格）
+│   ├── README.md            # 该模型的测试说明
+│   ├── cases.yaml           # 用例定义（虚拟人像生命周期链 + 真人会话 + 负向用例）
+│   ├── run_tests.py         # 执行入口（串行：建组→上传→轮询 Active→查询）
+│   ├── volc_sign.py         # 火山 Signature V4 签名（纯标准库）
+│   ├── schemas/             # 火山信封 + 各 Action Result 的 JSON Schema
+│   └── reports/             # 运行结果输出目录（git 忽略）
 └── <model-name>/            # 其余模型按相同结构组织
     ├── README.md            # 该模型的测试说明
     ├── cases.yaml           # 用例定义

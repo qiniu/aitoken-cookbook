@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_list_assets.schema.json",
+  "title": "ListAssets 成功 Result",
+  "description": "查询素材成功时，Result 含 Items 数组与分页字段 TotalCount/PageNumber/PageSize。Items 每项为素材对象。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["Items", "TotalCount", "PageNumber", "PageSize"],
+      "properties": {
+        "Items": {
+          "type": "array",
+          "description": "素材列表",
+          "items": {
+            "type": "object",
+            "required": ["Id", "AssetType", "Status"],
+            "properties": {
+              "Id": { "type": "string", "minLength": 1 },
+              "GroupId": { "type": "string" },
+              "Status": {
+                "type": "string",
+                "enum": ["Processing", "Active", "Failed"]
+              },
+              "AssetType": {
+                "type": "string",
+                "enum": ["Image", "Video", "Audio"]
+              },
+              "Name": { "type": "string" },
+              "URL": { "type": "string" },
+              "ProjectName": { "type": "string" },
+              "CreateTime": { "type": "string" },
+              "UpdateTime": { "type": "string" },
+              "Moderation": {
+                "type": "object",
+                "properties": { "Strategy": { "type": "string" } }
+              }
+            }
+          }
+        },
+        "TotalCount": { "type": "integer", "minimum": 0 },
+        "PageNumber": { "type": "integer", "minimum": 1 },
+        "PageSize": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_get_asset.schema.json",
+  "title": "GetAsset 成功 Result",
+  "description": "获取单个素材成功时，Result 为素材对象，含 Id/GroupId/Status/AssetType 等。Status 取值 Processing/Active/Failed；Active 时 URL 为带签名的可访问地址（有效期 12h）。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["Id", "GroupId", "Status", "AssetType"],
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "素材资产 ID"
+        },
+        "GroupId": {
+          "type": "string",
+          "description": "所属素材组合 ID"
+        },
+        "Status": {
+          "type": "string",
+          "enum": ["Processing", "Active", "Failed"],
+          "description": "素材状态；Active 方可用于推理"
+        },
+        "AssetType": {
+          "type": "string",
+          "enum": ["Image", "Video", "Audio"],
+          "description": "素材类型"
+        },
+        "Name": {
+          "type": "string",
+          "description": "素材名称，仅用于 ListAssets 模糊搜索，可为空"
+        },
+        "URL": {
+          "type": "string",
+          "description": "素材可访问 URL，Active 时为带签名地址（有效期 12h）"
+        },
+        "ProjectName": {
+          "type": "string",
+          "description": "所属项目名，默认 default"
+        },
+        "CreateTime": {
+          "type": "string",
+          "description": "创建时间，ISO8601"
+        },
+        "UpdateTime": {
+          "type": "string",
+          "description": "更新时间，ISO8601"
+        },
+        "Moderation": {
+          "type": "object",
+          "description": "审核策略",
+          "properties": {
+            "Strategy": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

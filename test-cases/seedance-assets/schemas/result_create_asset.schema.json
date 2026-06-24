@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_create_asset.schema.json",
+  "title": "CreateAsset 成功 Result",
+  "description": "上传素材成功时，Result 必含非空 Id（素材资产 ID，形如 asset-YYYYMMDD...）。CreateAsset 为异步接口，素材需轮询 GetAsset 至 Status=Active 后方可用于推理。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["Id"],
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "素材资产 ID"
+        }
+      }
+    }
+  }
+}
