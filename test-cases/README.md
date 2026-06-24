@@ -58,8 +58,8 @@ test-cases/
    bash test-cases/setup.sh -f     # 强制删除并重建 .venv
    source test-cases/.venv/bin/activate
    ```
-   依赖在 [requirements.txt](requirements.txt) 中定义（`pyyaml`、`jsonschema`）；
-   `.venv/` 已被 git 忽略，不纳入版本控制。
+   依赖在 [requirements.txt](requirements.txt) 中定义并锁定版本（`pyyaml`、`jsonschema`），
+   以保证测试环境可重复；`.venv/` 已被 git 忽略，不纳入版本控制。
 
 > 具体环境变量以各模型目录的 README 为准。
 
