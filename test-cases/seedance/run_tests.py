@@ -238,9 +238,33 @@ def build_query_url(base_url: str, task_id: str) -> str:
     return build_create_url(base_url) + "/" + urllib.parse.quote(task_id, safe="")
 
 
+def parse_response(raw: str, content_type: str) -> dict:
+    """把原始响应体解析为 dict；非 JSON（如返回 HTML）时不抛异常，
+    而是返回一个标记 dict，原样保留原始 body 与 content-type，便于报告定位。
+    """
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        return {
+            "_non_json_response": True,
+            "_content_type": content_type,
+            "_parse_error": str(exc),
+            "_raw_body": raw,
+        }
+    # 顶层不是对象（如返回裸数组/字符串）时也包一层，保证下游 .get 安全
+    if not isinstance(parsed, dict):
+        return {"_non_object_response": True, "_content_type": content_type, "_raw_body": parsed}
+    return parsed
+
+
 def send_request(url: str, api_key: str, method: str, body: dict | None,
                  timeout: int) -> tuple[int, dict]:
-    """发送请求并解析 JSON 响应，返回 (状态码, 响应 JSON)。"""
+    """发送请求并解析响应，返回 (状态码, 响应 dict)。
+
+    无论成功响应还是 HTTP 错误，都先读出原始 body 再解析；非 JSON 响应
+    （如网关返回 HTML 首页）不抛异常，而是返回带原始内容的标记 dict，
+    使原始响应能完整记录到报告中。
+    """
     data = json.dumps(body).encode("utf-8") if body is not None else None
     req = urllib.request.Request(
         url,
@@ -253,14 +277,14 @@ def send_request(url: str, api_key: str, method: str, body: dict | None,
     )
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            return resp.status, json.loads(resp.read().decode("utf-8"))
+            raw = resp.read().decode("utf-8", errors="replace")
+            ctype = resp.headers.get("Content-Type", "")
+            return resp.status, parse_response(raw, ctype)
     except urllib.error.HTTPError as exc:
         # HTTP 错误也读出 body，便于报告里展示错误详情
         raw = exc.read().decode("utf-8", errors="replace")
-        try:
-            return exc.code, json.loads(raw)
-        except json.JSONDecodeError:
-            return exc.code, {"error": raw}
+        ctype = exc.headers.get("Content-Type", "") if exc.headers else ""
+        return exc.code, parse_response(raw, ctype)
 
 
 def poll_task(base_url: str, api_key: str, task_id: str, *, interval: int,
