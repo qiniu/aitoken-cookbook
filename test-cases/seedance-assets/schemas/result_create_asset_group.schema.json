@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_create_asset_group.schema.json",
+  "title": "CreateAssetGroup 成功 Result",
+  "description": "创建素材组合成功时，Result 必含非空 Id（素材组合 ID，形如 group-YYYYMMDD...）。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["Id"],
+      "properties": {
+        "Id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "素材组合 ID"
+        }
+      }
+    }
+  }
+}

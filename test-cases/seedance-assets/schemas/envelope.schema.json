@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/envelope.schema.json",
+  "title": "火山方舟 OpenAPI 响应外层信封",
+  "description": "火山方舟 Action 风格接口的统一响应外层结构。无论成功或失败，HTTP 响应体都应含 ResponseMetadata；成功时 ResponseMetadata.Error 为 null 且有 Result，失败时 ResponseMetadata.Error 含 Code/Message。本基础 schema 只校验 ResponseMetadata 必存在，Result 的具体结构由各接口的成功态 schema 在内存中 allOf 叠加。",
+  "type": "object",
+  "required": ["ResponseMetadata"],
+  "properties": {
+    "ResponseMetadata": {
+      "type": "object",
+      "required": ["RequestId", "Action", "Version"],
+      "properties": {
+        "RequestId": {
+          "type": "string",
+          "description": "请求唯一标识"
+        },
+        "Action": {
+          "type": "string",
+          "description": "本次调用的 Action 名"
+        },
+        "Version": {
+          "type": "string",
+          "description": "API 版本，固定 2024-01-01"
+        },
+        "Service": {
+          "type": "string",
+          "description": "服务名，固定 ark"
+        },
+        "Region": {
+          "type": "string",
+          "description": "区域，固定 cn-beijing"
+        },
+        "Error": {
+          "description": "成功为 null；失败时含错误码与提示",
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["Code", "Message"],
+              "properties": {
+                "Code": { "type": "string" },
+                "Message": { "type": "string" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "Result": {
+      "description": "成功时的业务返回；具体结构由各接口 schema 约束"
+    }
+  }
+}

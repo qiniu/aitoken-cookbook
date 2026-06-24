@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_empty.schema.json",
+  "title": "空 Result 成功响应",
+  "description": "DeleteAsset / DeleteAssetGroup 等删除接口成功时，Result 为空对象 {}。仅校验 Result 为对象类型。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "description": "空对象 {}"
+    }
+  }
+}

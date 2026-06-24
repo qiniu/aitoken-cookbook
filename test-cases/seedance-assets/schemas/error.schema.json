@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/error.schema.json",
+  "title": "火山方舟 OpenAPI 错误响应",
+  "description": "失败响应：ResponseMetadata.Error 必须为含 Code/Message 的对象（负向用例校验错误格式兼容）。",
+  "type": "object",
+  "required": ["ResponseMetadata"],
+  "properties": {
+    "ResponseMetadata": {
+      "type": "object",
+      "required": ["RequestId", "Error"],
+      "properties": {
+        "RequestId": { "type": "string" },
+        "Error": {
+          "type": "object",
+          "required": ["Code", "Message"],
+          "properties": {
+            "Code": {
+              "type": "string",
+              "minLength": 1,
+              "description": "错误码，如 NotFound / InvalidParameter 等"
+            },
+            "Message": {
+              "type": "string",
+              "description": "错误提示信息"
+            }
+          }
+        }
+      }
+    }
+  }
+}

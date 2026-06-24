@@ -1,0 +1,185 @@
+# Seedance 素材资产（Assets）API 测试用例定义（火山方舟兼容格式）
+#
+# 校验目标：被测端点的 path、请求体、响应体、鉴权方式能完全兼容火山方舟
+# 素材资产 API 格式。
+#   端点    POST {API_BASE_URL}/?Action=<Action>&Version=2024-01-01
+#   鉴权    AK/SK 火山 Signature V4 签名（见 volc_sign.py）
+#   响应    火山信封 {ResponseMetadata:{...,Error}, Result:{...}}
+#
+# 与视频生成套件不同，素材资产是「有依赖的生命周期链」：建组 → 上传 →
+# 轮询 Active → 查询。因此本文件用有序 steps，后续 step 通过占位符引用
+# 前序 step 的输出：
+#   ${group_id}   CreateAssetGroup 返回的 Result.Id
+#   ${asset_id}   CreateAsset 返回的 Result.Id
+#
+# 每个 step 字段：
+#   id        唯一标识
+#   name      可读名称
+#   action    火山 Action 名（拼到 ?Action=）
+#   body      请求体（PascalCase 字段，值支持 ${group_id}/${asset_id} 占位符）
+#   checks    校验项列表
+#   poll      可选；存在则对该 step 轮询（见下）
+#   capture   可选；把 Result 中某字段存入变量供后续 step 引用
+#
+# poll 轮询配置（仅 wait_asset_active 用）：
+#   until_field   轮询时检查的 Result 字段（如 Status）
+#   until_value   期望终值（如 Active）
+#   fail_values   命中即判失败的值（如 [Failed]）
+#
+# 可用的 checks（含义见 run_tests.py）：
+#   http_2xx              HTTP 2xx
+#   envelope              响应通过 envelope.schema.json（含 ResponseMetadata）
+#   no_error              ResponseMetadata.Error 为 null（成功响应）
+#   result_schema         Result 通过该 step 声明的 result_schema
+#   error_schema          响应通过 error.schema.json（负向用例，校验错误格式）
+#   error_status_4xx      HTTP 4xx（负向用例）
+
+# ---------- 全局配置 ----------
+
+# 上传素材用的图片 URL（被测服务需能访问）。默认填火山官方文档示例素材。
+asset_image_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg"
+
+# 项目名（火山多项目隔离）。需与 AK/SK 有权限的项目一致，否则会 403 AccessDenied。
+# 可用环境变量 VOLC_PROJECT_NAME 覆盖（优先级：环境变量 > 此处 > default）。
+project_name: "default"
+
+# 轮询配置（CreateAsset 异步预处理，需等到 Active）
+poll_interval: 5      # 轮询间隔（秒）
+poll_timeout: 600     # 单个素材轮询总超时（秒）
+
+# 真人认证回调地址（仅 CreateVisualValidateSession 用，不会真实跳转）
+liveness_callback_url: "https://www.example.com/callback"
+
+# ---------- 虚拟人像库：完整生命周期 ----------
+steps:
+  - id: create_group
+    name: 创建素材组合（CreateAssetGroup）
+    action: CreateAssetGroup
+    body:
+      Name: "test_figure_group"
+      Description: "test-cases 自动化创建的素材组"
+      ProjectName: "${project_name}"
+    result_schema: result_create_asset_group.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+    capture:
+      group_id: Id     # 把 Result.Id 存入 ${group_id}
+
+  - id: create_asset
+    name: 上传素材（CreateAsset，Image）
+    action: CreateAsset
+    body:
+      GroupId: "${group_id}"
+      URL: "${asset_image_url}"
+      AssetType: "Image"
+      Name: "test_asset_image"
+      ProjectName: "${project_name}"
+    result_schema: result_create_asset.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+    capture:
+      asset_id: Id     # 把 Result.Id 存入 ${asset_id}
+
+  - id: wait_asset_active
+    name: 轮询素材状态至 Active（GetAsset）
+    action: GetAsset
+    body:
+      Id: "${asset_id}"
+      ProjectName: "${project_name}"
+    result_schema: result_get_asset.schema.json
+    poll:
+      until_field: Status
+      until_value: Active
+      fail_values: [Failed]
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  - id: list_assets
+    name: 查询素材（ListAssets，按 GroupIds + Statuses）
+    action: ListAssets
+    body:
+      # 火山 Filter：GroupType 必填（素材资产为 AIGC）；GroupIds 为数组；
+      # Statuses 支持 Active/Processing/Failed
+      Filter:
+        GroupType: "AIGC"
+        GroupIds: ["${group_id}"]
+        Statuses: ["Active", "Processing"]
+      PageNumber: 1
+      PageSize: 10
+      # ProjectName 必传：不传时默认按 project/* 鉴权，AK/SK 无通配权限会 403
+      ProjectName: "${project_name}"
+    result_schema: result_list_assets.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  - id: list_asset_groups
+    name: 查询素材组合（ListAssetGroups）
+    action: ListAssetGroups
+    body:
+      # Filter：GroupType 必填（素材资产为 AIGC）；GroupIds 为数组
+      Filter:
+        GroupType: "AIGC"
+        GroupIds: ["${group_id}"]
+      PageNumber: 1
+      PageSize: 10
+      # ProjectName 必传：不传时默认按 project/* 鉴权，AK/SK 无通配权限会 403
+      ProjectName: "${project_name}"
+    result_schema: result_list_asset_groups.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  # ---------- 更新接口 ----------
+  - id: update_asset
+    name: 更新素材名称（UpdateAsset）
+    action: UpdateAsset
+    body:
+      Id: "${asset_id}"
+      Name: "test_asset_image_renamed"
+      ProjectName: "${project_name}"
+    result_schema: result_id.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  - id: update_asset_group
+    name: 更新素材组名称与描述（UpdateAssetGroup）
+    action: UpdateAssetGroup
+    body:
+      Id: "${group_id}"
+      Name: "test_figure_group_renamed"
+      Description: "test-cases 自动化更新后的素材组"
+      ProjectName: "${project_name}"
+    result_schema: result_id.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  # ---------- 真人人像：可自动化部分 ----------
+  - id: create_liveness_session
+    name: 拉起真人认证 H5 会话（CreateVisualValidateSession，仅验响应格式）
+    action: CreateVisualValidateSession
+    body:
+      CallbackURL: "${liveness_callback_url}"
+      ProjectName: "${project_name}"
+    result_schema: result_create_visual_validate_session.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  # ---------- 负向用例：错误响应格式 ----------
+  - id: invalid_get_asset_error
+    name: 查询不存在素材的错误响应格式（GetAsset 非法 Id）
+    action: GetAsset
+    body:
+      Id: "asset-does-not-exist-00000000"
+      ProjectName: "${project_name}"
+    checks: [error_schema]
+
+  # ---------- 删除接口（放最后，顺带清理本次创建的资源）----------
+  # 删除有先后：先删素材，再删空的素材组。Result 为空对象 {}。
+  - id: delete_asset
+    name: 删除素材（DeleteAsset）
+    action: DeleteAsset
+    body:
+      Id: "${asset_id}"
+      ProjectName: "${project_name}"
+    result_schema: result_empty.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]
+
+  - id: delete_asset_group
+    name: 删除素材组（DeleteAssetGroup）
+    action: DeleteAssetGroup
+    body:
+      Id: "${group_id}"
+      ProjectName: "${project_name}"
+    result_schema: result_empty.schema.json
+    checks: [http_2xx, envelope, no_error, result_schema]

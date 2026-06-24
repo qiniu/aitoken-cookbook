@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_create_visual_validate_session.schema.json",
+  "title": "CreateVisualValidateSession 成功 Result",
+  "description": "拉起真人认证 H5 会话成功时，Result 含 BytedToken（认证凭证）与 H5Link（认证页链接）。真人需用 H5Link 完成刷脸认证后，凭 BytedToken 调 GetVisualValidateResult 取 Group ID——刷脸步骤无法自动化，本用例仅校验拉起会话的响应格式。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["BytedToken", "H5Link"],
+      "properties": {
+        "BytedToken": {
+          "type": "string",
+          "minLength": 1,
+          "description": "本次认证的唯一凭证标识，用于 GetVisualValidateResult 取 Group ID"
+        },
+        "H5Link": {
+          "type": "string",
+          "minLength": 1,
+          "description": "真人认证 H5 页链接"
+        },
+        "CallbackURL": {
+          "type": "string",
+          "description": "认证完成后的回调地址（创建时传入则原样返回）"
+        }
+      }
+    }
+  }
+}
