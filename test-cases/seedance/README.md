@@ -82,6 +82,7 @@ HTTP 请求使用标准库 `urllib`，无需安装 requests。相比 gpt-image-2
 ```bash
 export API_BASE_URL="https://your-domain.com/api/v3"   # 被测接口地址
 export API_KEY="your-api-key"                          # 被测接口密钥
+export SEEDANCE_MODEL="doubao-seedance-2-0-260128"     # 被测模型 id（也可用 --model 覆盖）
 python run_tests.py
 ```
 
