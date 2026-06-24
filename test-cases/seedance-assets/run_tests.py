@@ -16,9 +16,11 @@
 后续 step 通过 ${group_id} / ${asset_id} 占位符引用前序 step 的输出。
 
 环境变量：
-  API_BASE_URL    必填，被测接口的基础地址，如 https://your-domain.com/api/v3
-  VOLC_ACCESS_KEY 必填，火山 AK
-  VOLC_SECRET_KEY 必填，火山 SK
+  API_BASE_URL      必填，被测接口的基础地址，如 https://your-domain.com/api/v3
+  VOLC_ACCESS_KEY   必填，火山 AK
+  VOLC_SECRET_KEY   必填，火山 SK
+  VOLC_PROJECT_NAME 选填，项目名；需与 AK/SK 有权限的项目一致。
+                    优先级：环境变量 > cases.yaml 的 project_name > default。
 
 用法：
   python run_tests.py            # 串行执行整条生命周期链
@@ -393,6 +395,12 @@ def main() -> int:
     base_url = os.environ.get("API_BASE_URL", "")
     access_key = os.environ.get("VOLC_ACCESS_KEY", "")
     secret_key = os.environ.get("VOLC_SECRET_KEY", "")
+
+    # project_name 是账号相关配置（需与 AK/SK 有权限的项目一致），
+    # 优先级：环境变量 VOLC_PROJECT_NAME > cases.yaml > default。
+    env_project = os.environ.get("VOLC_PROJECT_NAME", "")
+    if env_project:
+        config["project_name"] = env_project
 
     if not args.dry_run:
         missing = [n for n, v in (("API_BASE_URL", base_url), ("VOLC_ACCESS_KEY", access_key),

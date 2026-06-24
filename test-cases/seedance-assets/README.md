@@ -105,6 +105,7 @@ source test-cases/.venv/bin/activate
 export API_BASE_URL="https://your-domain.com/api/v3"   # 被测接口地址
 export VOLC_ACCESS_KEY="your-access-key"               # 火山 AK
 export VOLC_SECRET_KEY="your-secret-key"               # 火山 SK
+export VOLC_PROJECT_NAME="your-project"                # 选填，项目名（需与 AK/SK 有权限的项目一致）
 python run_tests.py
 ```
 
@@ -115,6 +116,7 @@ python run_tests.py
 | `API_BASE_URL` | 无（必填） | 被测接口的基础地址 |
 | `VOLC_ACCESS_KEY` | 无（必填） | 火山 Access Key |
 | `VOLC_SECRET_KEY` | 无（必填） | 火山 Secret Key |
+| `VOLC_PROJECT_NAME` | `cases.yaml` 的 `project_name`（默认 `default`） | 项目名；需与 AK/SK 有权限的项目一致，否则 403 AccessDenied |
 
 不打真实接口、仅自测「请求体构造、占位符替换与 schema 加载」（无需 AK/SK）：
 

@@ -39,7 +39,8 @@
 # 上传素材用的图片 URL（被测服务需能访问）。默认填火山官方文档示例素材。
 asset_image_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/r2v_tea_pic1.jpg"
 
-# 项目名（火山多项目隔离；默认 default）
+# 项目名（火山多项目隔离）。需与 AK/SK 有权限的项目一致，否则会 403 AccessDenied。
+# 可用环境变量 VOLC_PROJECT_NAME 覆盖（优先级：环境变量 > 此处 > default）。
 project_name: "default"
 
 # 轮询配置（CreateAsset 异步预处理，需等到 Active）
@@ -91,11 +92,13 @@ steps:
     checks: [http_2xx, envelope, no_error, result_schema]
 
   - id: list_assets
-    name: 查询素材（ListAssets，按 GroupId）
+    name: 查询素材（ListAssets，按 GroupIds + Statuses）
     action: ListAssets
     body:
+      # 火山 Filter：GroupIds 为数组；Statuses 支持 Active/Processing/Failed
       Filter:
-        GroupId: "${group_id}"
+        GroupIds: ["${group_id}"]
+        Statuses: ["Active", "Processing"]
       PageNumber: 1
       PageSize: 10
     result_schema: result_list_assets.schema.json
