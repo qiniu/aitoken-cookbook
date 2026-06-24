@@ -101,6 +101,8 @@ steps:
         Statuses: ["Active", "Processing"]
       PageNumber: 1
       PageSize: 10
+      # ProjectName 必传：不传时默认按 project/* 鉴权，AK/SK 无通配权限会 403
+      ProjectName: "${project_name}"
     result_schema: result_list_assets.schema.json
     checks: [http_2xx, envelope, no_error, result_schema]
 
@@ -112,6 +114,8 @@ steps:
         GroupIds: ["${group_id}"]
       PageNumber: 1
       PageSize: 10
+      # ProjectName 必传：不传时默认按 project/* 鉴权，AK/SK 无通配权限会 403
+      ProjectName: "${project_name}"
     result_schema: result_list_asset_groups.schema.json
     checks: [http_2xx, envelope, no_error, result_schema]
 
