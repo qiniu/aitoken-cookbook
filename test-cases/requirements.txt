@@ -1,0 +1,4 @@
+# test-cases 各模型脚本共用的第三方依赖
+# 锁定版本以保证测试环境可重复，避免依赖发布不兼容新版导致脚本运行失败
+pyyaml==6.0.3        # 解析 cases.yaml 用例定义
+jsonschema==4.26.0   # 校验响应体结构（seedance schemas/）

@@ -10,6 +10,8 @@
 ```
 test-cases/
 ├── README.md
+├── setup.sh                 # 一键创建共享虚拟环境（.venv）并安装依赖
+├── requirements.txt         # 各模型脚本共用的第三方依赖
 ├── _shared/                 # 公共工具
 │   ├── report.py            # 报告模块：统一结果格式，一次产出 json/md/html
 │   └── gpt_image_2_token_calculator.py  # gpt-image-2 输出 token 计算工具
@@ -50,15 +52,23 @@ test-cases/
    export API_BASE_URL="https://your-domain.com/v1"
    export API_KEY="your-api-key"
    ```
-3. 安装依赖（各模型目录的 README 中会说明具体依赖）
+3. 创建虚拟环境并安装依赖（各模型脚本共用一个 `.venv`）：
+   ```bash
+   bash test-cases/setup.sh        # 创建 .venv（已存在则复用）并安装依赖
+   bash test-cases/setup.sh -f     # 强制删除并重建 .venv
+   source test-cases/.venv/bin/activate
+   ```
+   依赖在 [requirements.txt](requirements.txt) 中定义并锁定版本（`pyyaml`、`jsonschema`），
+   以保证测试环境可重复；`.venv/` 已被 git 忽略，不纳入版本控制。
 
 > 具体环境变量以各模型目录的 README 为准。
 
 ## 如何运行
 
-进入对应模型目录，执行测试脚本：
+先按前置条件创建并激活虚拟环境，再进入对应模型目录执行测试脚本：
 
 ```bash
+source test-cases/.venv/bin/activate   # 若尚未激活
 cd test-cases/<model-name>
 python run_tests.py
 ```
@@ -130,3 +140,4 @@ python _shared/gpt_image_2_token_calculator.py --json medium 1536 1024
 2. 编写 `cases.yaml` 定义用例
 3. 编写 `run_tests.py` 作为执行入口
 4. 补充该目录的 `README.md`
+5. 若引入了新的第三方依赖，追加到根目录 [requirements.txt](requirements.txt)，并重跑 `setup.sh` 安装
