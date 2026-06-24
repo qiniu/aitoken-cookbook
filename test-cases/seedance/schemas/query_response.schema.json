@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance/query_response.schema.json",
+  "title": "Seedance 查询视频生成任务响应（基础结构）",
+  "description": "火山方舟 GET /contents/generations/tasks/{id} 的响应结构契约。本基础 schema 在任意任务状态（queued/running/succeeded/...）下都应通过，因此只对所有状态都必然存在的字段做 required；成功态的额外约束（必有 content.video_url 与 usage）由 run_tests.py 在内存中 allOf 组合。",
+  "type": "object",
+  "required": ["id", "model", "status", "created_at", "updated_at"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "视频生成任务 ID"
+    },
+    "model": {
+      "type": "string",
+      "description": "任务使用的模型名称-版本"
+    },
+    "status": {
+      "type": "string",
+      "description": "任务状态，取值为火山方舟视频任务的全部状态",
+      "enum": ["queued", "running", "cancelled", "succeeded", "failed", "expired"]
+    },
+    "error": {
+      "description": "任务成功为 null；失败时为含 code/message 的对象",
+      "anyOf": [
+        { "type": "null" },
+        {
+          "type": "object",
+          "required": ["code", "message"],
+          "properties": {
+            "code": { "type": "string" },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "created_at": {
+      "type": "integer",
+      "description": "任务创建时间 Unix 秒"
+    },
+    "updated_at": {
+      "type": "integer",
+      "description": "任务状态更新时间 Unix 秒"
+    },
+    "content": {
+      "description": "任务输出内容；进行中可能为空对象或缺省",
+      "type": ["object", "null"],
+      "properties": {
+        "video_url": {
+          "type": "string",
+          "description": "生成视频 URL，mp4，约 24h 有效"
+        },
+        "last_frame_url": {
+          "type": "string",
+          "description": "尾帧图像 URL，仅 return_last_frame=true 时返回"
+        }
+      }
+    },
+    "usage": {
+      "description": "Token 用量；进行中可能缺省",
+      "type": "object",
+      "properties": {
+        "completion_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "视频生成消耗的 token 数"
+        },
+        "total_tokens": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "总 token 数；视频生成 total_tokens = completion_tokens"
+        },
+        "tool_usage": {
+          "type": "object",
+          "properties": {
+            "web_search": {
+              "type": "integer",
+              "description": "联网搜索工具调用次数"
+            }
+          }
+        }
+      }
+    },
+    "seed": {
+      "type": "integer",
+      "description": "本次请求使用的种子值"
+    },
+    "resolution": {
+      "type": "string",
+      "description": "生成视频的分辨率"
+    },
+    "ratio": {
+      "type": "string",
+      "description": "生成视频的宽高比"
+    },
+    "duration": {
+      "type": "integer",
+      "description": "视频时长（秒）；与 frames 通常只返回其一"
+    },
+    "frames": {
+      "type": "integer",
+      "description": "视频帧数；与 duration 通常只返回其一"
+    },
+    "framespersecond": {
+      "type": "integer",
+      "description": "视频帧率"
+    },
+    "generate_audio": {
+      "type": "boolean",
+      "description": "是否生成同步音频；仅部分模型返回"
+    },
+    "draft": {
+      "type": "boolean",
+      "description": "是否为 Draft 视频；仅部分模型返回"
+    },
+    "service_tier": {
+      "type": "string"
+    },
+    "execution_expires_after": {
+      "type": "integer"
+    }
+  }
+}

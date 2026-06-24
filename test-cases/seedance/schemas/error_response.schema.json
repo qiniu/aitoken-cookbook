@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance/error_response.schema.json",
+  "title": "Seedance 错误响应",
+  "description": "火山方舟视频生成接口的错误响应结构契约。创建/查询任务出错时返回 {error: {code, message, ...}}，例如模型不存在、鉴权失败、参数非法等。",
+  "type": "object",
+  "required": ["error"],
+  "properties": {
+    "error": {
+      "type": "object",
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "description": "错误码，如 InvalidEndpointOrModel.NotFound"
+        },
+        "message": {
+          "type": "string",
+          "description": "错误提示信息"
+        },
+        "param": {
+          "type": "string",
+          "description": "出错的参数名；可能为空字符串"
+        },
+        "type": {
+          "type": "string",
+          "description": "错误类型，如 Not Found"
+        }
+      }
+    }
+  }
+}
