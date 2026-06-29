@@ -378,6 +378,81 @@ def run_step(step: dict, *, schemas: dict, config: dict, variables: dict,
     ), verdict == "pass"
 
 
+# ==================== 真人素材测试链（交互式，仅 --real-person）====================
+
+
+def run_rp_request(*, sid: str, name: str, action: str, body: dict,
+                   checks: list[str], result_schema_name: str | None,
+                   schemas: dict, base_url: str, access_key: str, secret_key: str,
+                   timeout: int = 120) -> tuple[CaseResult, dict]:
+    """执行一次真人链请求并按 checks 校验，返回 (CaseResult, 响应 dict)。
+
+    与声明式 run_step 不同：真人链需要拿到原始 resp 做 capture 与分支判断，
+    故单独返回 resp。
+    """
+    start = time.monotonic()
+    base_details = {"action": action, "request_body": truncate(body)}
+    try:
+        status, resp = send_signed_request(
+            base_url, action, body,
+            access_key=access_key, secret_key=secret_key, timeout=timeout,
+        )
+    except Exception as exc:  # noqa: BLE001
+        elapsed = int((time.monotonic() - start) * 1000)
+        return CaseResult(
+            id=sid, name=name, status="error", error=f"请求异常：{exc!r}",
+            duration_ms=elapsed, details={**base_details, "checks": checks},
+        ), {}
+
+    elapsed = int((time.monotonic() - start) * 1000)
+    verdict, error = run_checks(checks, schemas, status=status, resp=resp,
+                                result_schema_name=result_schema_name)
+    return CaseResult(
+        id=sid, name=name, status=verdict, error=error or None,
+        duration_ms=elapsed,
+        details={
+            **base_details, "http_status": status, "checks": checks,
+            "result_schema": result_schema_name, "response": truncate(resp),
+        },
+    ), resp
+
+
+def rp_poll_field(*, action: str, body: dict, until_field: str, until_value,
+                  fail_values: set, interval: int, timeout: int,
+                  base_url: str, access_key: str, secret_key: str,
+                  until_present: bool = False) -> tuple[int, dict, int]:
+    """轮询某 Result 字段直到命中终止条件 / 超时。
+
+    终止条件：
+      - until_present=False（默认）：字段值 == until_value，或 in fail_values。
+      - until_present=True：字段出现非空值即停（用于轮询 GroupId 出现，
+        此时 until_value 被忽略）。
+    HTTP 非 200 或 ResponseMetadata.Error 非空也立即停止。
+    返回 (最后一次 HTTP 状态, 最后一次响应 dict, 轮询次数)。
+    """
+    deadline = time.monotonic() + timeout
+    status, resp, polls = 0, {}, 0
+    while True:
+        status, resp = send_signed_request(
+            base_url, action, body,
+            access_key=access_key, secret_key=secret_key, timeout=60,
+        )
+        polls += 1
+        result = resp.get("Result") if isinstance(resp, dict) else None
+        cur = result.get(until_field) if isinstance(result, dict) else None
+        if status != 200 or has_metadata_error(resp):
+            break
+        if until_present:
+            if cur:  # 非空即满足
+                break
+        elif cur == until_value or cur in fail_values:
+            break
+        if time.monotonic() >= deadline:
+            break
+        time.sleep(interval)
+    return status, resp, polls
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="运行 Seedance 素材资产 API 测试用例")
     parser.add_argument(
