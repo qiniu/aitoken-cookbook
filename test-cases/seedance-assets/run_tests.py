@@ -731,6 +731,10 @@ def main() -> int:
         "--out", default=str(HERE / "reports"),
         help="报告输出目录，默认 ./reports",
     )
+    parser.add_argument(
+        "--real-person", action="store_true",
+        help="在常规链之后附加交互式真人素材测试链（需真实 AK/SK + 测试者刷脸配合）",
+    )
     args = parser.parse_args()
 
     schemas = load_schemas()
@@ -786,6 +790,31 @@ def main() -> int:
         # 生命周期链上的 step 失败 → 标记断链
         if not ok and step["id"] in (depends_on_chain | {"create_group"}):
             chain_broken = True
+
+    # 真人素材测试链（仅 --real-person）：交互式，跑在常规链之后。
+    if args.real_person:
+        if args.dry_run:
+            # dry-run 占位：不发请求、不交互，仅声明真人链将执行的 step。
+            for sid, name in (
+                ("rp_create_session", "拉起真人认证 H5 会话（CreateVisualValidateSession）"),
+                ("rp_result_before", "刷脸前查询认证结果（应取不到 GroupId）"),
+                ("rp_result_after", "刷脸后查询认证结果（取到 GroupId=认证通过）"),
+                ("rp_create_asset_match", "上传本人真人素材（CreateAsset，应入库成功）"),
+                ("rp_wait_match_active", "轮询本人素材至 Active（入库通过）"),
+                ("rp_create_asset_mismatch", "上传非本人素材（CreateAsset，应入库失败）"),
+                ("rp_wait_mismatch_fail", "非本人素材入库不通过"),
+                ("rp_invalid_token", "无效 BytedToken 查询认证结果（错误响应格式）"),
+                ("rp_cleanup_group", "删除真人素材组（DeleteAssetGroup，清理）"),
+            ):
+                results.append(CaseResult(
+                    id=sid, name=name, status="pass",
+                    details={"dry_run": True, "real_person_chain": True},
+                ))
+        else:
+            results.extend(run_real_person_chain(
+                schemas=schemas, config=config, base_url=base_url,
+                access_key=access_key, secret_key=secret_key,
+            ))
 
     report = Report(model="seedance-assets", cases=results)
     paths = report.write(args.out)
