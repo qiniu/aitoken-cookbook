@@ -453,6 +453,38 @@ def rp_poll_field(*, action: str, body: dict, until_field: str, until_value,
     return status, resp, polls
 
 
+def rp_print_h5(h5_link: str) -> None:
+    """在控制台醒目打印 H5 真人认证链接（完整、不截断），供测试者刷脸。"""
+    bar = "=" * 70
+    print("\n" + bar, file=sys.stderr)
+    print("请用以下链接在手机/浏览器完成真人刷脸认证（h5_link）：", file=sys.stderr)
+    print(h5_link, file=sys.stderr)
+    print(bar + "\n", file=sys.stderr)
+
+
+def rp_prompt_continue(message: str) -> bool:
+    """阻塞等待测试者回车继续；输入 skip 则返回 False（跳过真人链余下部分）。"""
+    try:
+        ans = input(f"{message}（完成后按回车继续，输入 skip 跳过真人链）：").strip()
+    except EOFError:
+        return False
+    return ans.lower() != "skip"
+
+
+def rp_prompt_url(message: str) -> str | None:
+    """阻塞读取一个 http(s) URL；输入 skip 返回 None；空或非法 URL 时重试。"""
+    while True:
+        try:
+            ans = input(f"{message}（输入 skip 跳过真人链）：").strip()
+        except EOFError:
+            return None
+        if ans.lower() == "skip":
+            return None
+        if ans.startswith("http://") or ans.startswith("https://"):
+            return ans
+        print("  输入无效：请提供以 http:// 或 https:// 开头的 URL", file=sys.stderr)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="运行 Seedance 素材资产 API 测试用例")
     parser.add_argument(
