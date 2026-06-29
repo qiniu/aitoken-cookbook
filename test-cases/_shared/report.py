@@ -63,17 +63,24 @@ _STATUS_ICON = {"pass": "✓", "fail": "✗", "error": "!"}
 
 
 def mask_secret(value: str, *, head: int = 4, tail: int = 4) -> str:
-    """对密钥类字符串脱敏：保留首尾若干字符，中间用 *** 替代。
+    """对密钥类字符串脱敏：露出首尾少量字符，其余用 *** 替代。
 
-    既能确认运行时用的是哪一把 key，又不泄露完整值（报告常被转发）。
-    过短（长度 <= head+tail）的串只露首字符，其余打码，避免被反推。
+    既能确认运行时用的是哪把 key，又不泄露完整值（报告常被转发）。
+    采用不变量「可见字符数 = min(head+tail, n//2)」：可见量同时受首尾上限
+    与「不超过长度一半」约束，因此无论密钥多长都至少隐藏一半，且可见量随
+    长度单调变化，不存在某个长度突然暴露大半内容的「悬崖效应」。
+    固定用 *** 作分隔符，同时隐藏被遮挡部分的真实长度。
     """
     if not value:
         return ""
     n = len(value)
-    if n <= head + tail:
-        return value[0] + "*" * (n - 1) if n > 1 else "*"
-    return f"{value[:head]}***{value[-tail:]}"
+    # 可见总量：不超过 head+tail，也不超过长度的一半（保证至少藏一半）
+    visible = min(head + tail, n // 2)
+    show_head = min(head, (visible + 1) // 2)
+    show_tail = min(tail, visible - show_head)
+    head_part = value[:show_head]
+    tail_part = value[-show_tail:] if show_tail else ""
+    return f"{head_part}***{tail_part}"
 
 
 @dataclass
