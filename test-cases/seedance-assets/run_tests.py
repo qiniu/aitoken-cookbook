@@ -647,17 +647,31 @@ def run_real_person_chain(*, schemas: dict, config: dict, base_url: str,
     )
     res6.details["mismatch_image_url"] = mismatch_url
     # step 6 本身只记录，不判 pass/fail（标 pass 仅表示请求已发出）
-    status6 = res6.details.get("http_status")
-    create6_failed = not (isinstance(status6, int) and 200 <= status6 < 300) or has_metadata_error(resp6)
-    res6.status = "pass"
-    res6.error = None
+    # 先判断是否为网络异常（请求未发出）
+    request6_sent = res6.status != "error"  # 网络异常时 status="error"
+    if request6_sent:
+        # 请求已发出：按原逻辑判断服务端响应
+        status6 = res6.details.get("http_status")
+        create6_failed = not (isinstance(status6, int) and 200 <= status6 < 300) or has_metadata_error(resp6)
+        res6.status = "pass"  # 标 pass 仅表示请求已发出
+        res6.error = None
+    else:
+        # 请求未发出（网络异常）：保留 error 状态，不计入「被拒」语义
+        status6 = None
+        create6_failed = False
     results.append(res6)
     result6 = resp6.get("Result") if isinstance(resp6, dict) else None
     mismatch_asset_id = result6.get("Id") if isinstance(result6, dict) else None
 
     # --- step 7: 判定非本人素材「入库不通过」---
     # 不通过的两种表现：CreateAsset 同步报错，或 GetAsset 轮询至 Failed。
-    if create6_failed:
+    if not request6_sent:
+        # 请求未发出（网络异常）：无法判定非本人素材入库结果
+        results.append(CaseResult(
+            id="rp_wait_mismatch_fail", name="非本人素材入库不通过", status="error",
+            error="CreateAsset 请求异常，无法判定非本人素材入库结果",
+        ))
+    elif create6_failed:
         # CreateAsset 直接拒绝即判通过
         results.append(CaseResult(
             id="rp_wait_mismatch_fail", name="非本人素材入库不通过（CreateAsset 被拒）",
