@@ -23,8 +23,9 @@
                  优先级：环境变量 > cases.yaml 的 project_name > default。
 
 用法：
-  python run_tests.py            # 串行执行整条生命周期链
-  python run_tests.py --dry-run  # 跳过真实请求，仅自测请求体构造、占位符替换与 schema 加载
+  python run_tests.py                  # 串行执行整条常规生命周期链
+  python run_tests.py --dry-run        # 跳过真实请求，仅自测请求体构造、占位符替换与 schema 加载
+  python run_tests.py --real-person    # 常规链之后附加交互式真人素材测试链（需真实 AK/SK + 测试者刷脸）
 """
 
 from __future__ import annotations
@@ -710,7 +711,7 @@ def run_real_person_chain(*, schemas: dict, config: dict, base_url: str,
         result_schema_name="result_empty.schema.json",
         schemas=schemas, base_url=base_url, access_key=access_key, secret_key=secret_key,
     )
-    # 清理失败不应让整体退出码失败：降级为 error 仅记录（error 不影响？见 main 处理）
+    # 清理失败不应让整体退出码失败：降级为 error 仅记录。
     # 注：report.passed 把 error 也算未通过，故清理失败降级为带标记的 pass。
     if res9.status != "pass":
         res9.details["cleanup_failed"] = True
