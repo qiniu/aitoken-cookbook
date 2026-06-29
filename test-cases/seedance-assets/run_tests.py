@@ -122,6 +122,10 @@ def load_config_and_steps() -> tuple[dict, list[dict]]:
         "poll_interval": int(data.get("poll_interval", 5)),
         "poll_timeout": int(data.get("poll_timeout", 600)),
         "liveness_callback_url": data.get("liveness_callback_url", ""),
+        # 真人素材测试链配置（仅 --real-person 用）
+        "mismatch_photo_url": data.get("mismatch_photo_url", ""),
+        "liveness_poll_interval": int(data.get("liveness_poll_interval", 5)),
+        "liveness_poll_timeout": int(data.get("liveness_poll_timeout", 120)),
     }
     return config, data.get("steps", [])
 

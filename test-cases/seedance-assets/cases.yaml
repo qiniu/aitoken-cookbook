@@ -50,6 +50,15 @@ poll_timeout: 600     # 单个素材轮询总超时（秒）
 # 真人认证回调地址（仅 CreateVisualValidateSession 用，不会真实跳转）
 liveness_callback_url: "https://www.example.com/callback"
 
+# ---------- 真人素材测试链配置（仅 --real-person 用）----------
+# 非本人照片 URL（固定）：用于「真人素材入库不通过」用例。
+# 该图与测试者刷脸基准图非同一人，预期被服务端人脸一致性比对拒绝（入库失败）。
+mismatch_photo_url: "https://aitoken-public.qnaigc.com/example/generate-video/running-man.jpg"
+
+# 刷脸完成后轮询 GetVisualValidateResult 取 GroupId 的间隔与总超时（秒）。
+liveness_poll_interval: 5
+liveness_poll_timeout: 120
+
 # ---------- 虚拟人像库：完整生命周期 ----------
 steps:
   - id: create_group
