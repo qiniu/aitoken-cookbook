@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "seedance-assets/result_get_visual_validate_result.schema.json",
+  "title": "GetVisualValidateResult 成功 Result",
+  "description": "真人认证成功后，凭 BytedToken 调 GetVisualValidateResult 取本次创建的 Asset Group ID。Result 含非空 GroupId。仅在刷脸认证通过后可取到——刷脸前或认证失败时取不到 GroupId。",
+  "type": "object",
+  "required": ["ResponseMetadata", "Result"],
+  "properties": {
+    "Result": {
+      "type": "object",
+      "required": ["GroupId"],
+      "properties": {
+        "GroupId": {
+          "type": "string",
+          "minLength": 1,
+          "description": "本次真人认证创建的 Asset Group ID"
+        }
+      }
+    }
+  }
+}

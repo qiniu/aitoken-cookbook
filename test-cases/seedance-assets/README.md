@@ -46,6 +46,7 @@
 | `result_id.schema.json` | UpdateAsset / UpdateAssetGroup 的 `Result`（回显非空 `Id`） |
 | `result_empty.schema.json` | DeleteAsset / DeleteAssetGroup 的 `Result`（空对象 `{}`） |
 | `result_create_visual_validate_session.schema.json` | CreateVisualValidateSession 的 `Result`（`BytedToken`/`H5Link`） |
+| `result_get_visual_validate_result.schema.json` | GetVisualValidateResult 的 `Result`（非空 `GroupId`，真人认证通过后取） |
 
 可用的 check（含义见 [run_tests.py](run_tests.py)）：
 
@@ -80,13 +81,32 @@
 避免在被测账号下残留垃圾数据。前置生命周期 step 失败时，依赖它的后续 step
 （含 update/delete）会被跳过（标记 error）。
 
-### 真人认证的人工步骤（无法自动化）
+### 真人认证与真人素材测试（`--real-person`）
 
-真人人像的完整流程需终端客户用 `CreateVisualValidateSession` 返回的 `H5Link`
-在手机上**完成刷脸认证**，认证通过后回调里带 `bytedToken`，再凭它调
-`GetVisualValidateResult` 取 Asset Group ID。刷脸这步无法自动化，所以本套件
-**只验证 `CreateVisualValidateSession` 拉起会话的响应格式**，不走完整认证，
-也不自动断言 `GetVisualValidateResult`。
+默认运行只验证 `CreateVisualValidateSession` 拉起会话的响应格式，不走完整认证。
+加 `--real-person` 开关后，会在常规链之后附加一条**交互式真人素材测试链**，
+覆盖真人素材入库的**通过**与**不通过**用例：
+
+```bash
+python run_tests.py --real-person
+```
+
+交互流程（需测试者配合）：
+
+1. 脚本调 `CreateVisualValidateSession`，在控制台打印 `h5_link`。
+2. **刷脸前**先调一次 `GetVisualValidateResult`，校验此时取不到 GroupId。
+3. 测试者用 `h5_link` 在手机/浏览器完成真人刷脸，完成后回脚本按回车。
+4. 脚本轮询 `GetVisualValidateResult` 取到本次认证创建的 `GroupId`（认证通过）。
+5. 提示测试者输入**本人**真人照片 URL → 调 `CreateAsset` 上传 → 轮询 `GetAsset`
+   至 `Active`（**真人素材入库通过**用例）。
+6. 用固定的**非本人**照片（`cases.yaml` 的 `mismatch_photo_url`）调 `CreateAsset`
+   → 期望 CreateAsset 被拒或 `GetAsset` 轮询至 `Failed`（**真人素材入库不通过**用例：
+   服务端把上传图与刷脸基准图做人脸一致性比对，非同一人应拒绝入库）。
+7. 用伪造的 BytedToken 调 `GetVisualValidateResult`，校验 4xx 错误响应格式。
+8. 删除本次真人认证创建的 Asset Group（清理，失败不影响整体结论）。
+
+> 真人链各 step 的结果并入同一份报告。任一交互提示输入 `skip` 可跳过真人链余下部分。
+> 不带 `--real-person` 时套件行为与原先完全一致，不会有任何交互阻塞（CI 友好）。
 
 ### 输入素材
 
