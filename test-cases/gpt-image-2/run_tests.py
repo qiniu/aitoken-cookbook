@@ -41,7 +41,7 @@ SHARED = HERE.parent / "_shared"
 
 # 复用公共报告模块
 sys.path.insert(0, str(SHARED))
-from report import CaseResult, Report  # noqa: E402
+from report import CaseResult, Report, mask_secret  # noqa: E402
 
 # 默认配置（base_url 无默认，必须通过 API_BASE_URL 指定）
 DEFAULT_MODEL = "gpt-image-2"
@@ -401,7 +401,13 @@ def main() -> int:
         with ThreadPoolExecutor(max_workers=len(cases)) as pool:
             results = list(pool.map(work, cases))
 
-    report = Report(model=model, cases=results)
+    # 记录本次运行的环境变量到报告（密钥脱敏，便于复现与排查）
+    env = {
+        "API_BASE_URL": base_url,
+        "API_KEY": mask_secret(api_key),
+        "GPT_IMAGE_MODEL": model,
+    }
+    report = Report(model=model, cases=results, env=env)
     paths = report.write(args.out)
     s = report.summary()
     verdict = "PASS" if report.passed else "FAIL"

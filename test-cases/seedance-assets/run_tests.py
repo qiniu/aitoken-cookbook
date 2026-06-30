@@ -47,7 +47,7 @@ SCHEMA_DIR = HERE / "schemas"
 # 复用公共报告模块与同目录签名模块
 sys.path.insert(0, str(SHARED))
 sys.path.insert(0, str(HERE))
-from report import CaseResult, Report  # noqa: E402
+from report import CaseResult, Report, mask_secret  # noqa: E402
 import volc_sign  # noqa: E402
 
 # 固定 API 版本（拼到 ?Version=）
@@ -831,7 +831,14 @@ def main() -> int:
                 access_key=access_key, secret_key=secret_key,
             ))
 
-    report = Report(model="seedance-assets", cases=results)
+    # 记录本次运行的环境变量到报告（密钥脱敏，便于复现与排查）
+    env = {
+        "API_BASE_URL": base_url,
+        "ACCESS_KEY": mask_secret(access_key),
+        "SECRET_KEY": mask_secret(secret_key),
+        "PROJECT_NAME": config["project_name"],
+    }
+    report = Report(model="seedance-assets", cases=results, env=env)
     paths = report.write(args.out)
     s = report.summary()
     verdict = "PASS" if report.passed else "FAIL"

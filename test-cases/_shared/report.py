@@ -62,12 +62,35 @@ class CaseResult:
 _STATUS_ICON = {"pass": "✓", "fail": "✗", "error": "!"}
 
 
+def mask_secret(value: str, *, head: int = 4, tail: int = 4) -> str:
+    """对密钥类字符串脱敏：露出首尾少量字符，其余用 *** 替代。
+
+    既能确认运行时用的是哪把 key，又不泄露完整值（报告常被转发）。
+    采用不变量「可见字符数 = min(head+tail, n//2)」：可见量同时受首尾上限
+    与「不超过长度一半」约束，因此无论密钥多长都至少隐藏一半，且可见量随
+    长度单调变化，不存在某个长度突然暴露大半内容的「悬崖效应」。
+    固定用 *** 作分隔符，同时隐藏被遮挡部分的真实长度。
+    """
+    if not value:
+        return ""
+    n = len(value)
+    # 可见总量：不超过 head+tail，也不超过长度的一半（保证至少藏一半）
+    visible = min(head + tail, n // 2)
+    show_head = min(head, (visible + 1) // 2)
+    show_tail = min(tail, visible - show_head)
+    head_part = value[:show_head]
+    tail_part = value[-show_tail:] if show_tail else ""
+    return f"{head_part}***{tail_part}"
+
+
 @dataclass
 class Report:
     """一次模型测试运行的完整报告。"""
 
     model: str
     cases: list[CaseResult] = field(default_factory=list)
+    # 运行时环境变量（展示用，敏感值应由调用方脱敏后传入）
+    env: dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> dict[str, int]:
         """统计总数与各状态数量、总耗时。"""
@@ -89,9 +112,10 @@ class Report:
         return s["failed"] == 0 and s["errored"] == 0
 
     def to_dict(self) -> dict[str, Any]:
-        """完整报告字典，顶层固定为 model / summary / cases。"""
+        """完整报告字典，顶层固定为 model / env / summary / cases。"""
         return {
             "model": self.model,
+            "env": self.env,
             "summary": self.summary(),
             "cases": [c.to_dict() for c in self.cases],
         }
@@ -111,6 +135,17 @@ class Report:
             f"总数 {s['total']}　通过 {s['passed']}　失败 {s['failed']}　"
             f"错误 {s['errored']}　耗时 {s['duration_ms']}ms",
             "",
+        ]
+        # 运行变量区块：记录本次测试用的环境变量
+        if self.env:
+            lines.append("## 运行变量")
+            lines.append("")
+            lines.append("| variable | value |")
+            lines.append("|----------|-------|")
+            for k, v in self.env.items():
+                lines.append(f"| {_md_cell(k)} | {_md_cell(v)} |")
+            lines.append("")
+        lines += [
             "| status | id | name | expected | actual | error | duration |",
             "|--------|----|------|----------|--------|-------|----------|",
         ]
@@ -139,7 +174,24 @@ class Report:
             failed=s["failed"],
             errored=s["errored"],
             duration=s["duration_ms"],
+            env=self._env_html(),
             rows=rows,
+        )
+
+    def _env_html(self) -> str:
+        """渲染运行变量区块；无变量时返回空串（不显示该区块）。"""
+        if not self.env:
+            return ""
+        rows = "\n".join(
+            f"<tr><td class='envk'>{_html.escape(str(k))}</td>"
+            f"<td><code>{_html.escape('' if v is None else str(v))}</code></td></tr>"
+            for k, v in self.env.items()
+        )
+        return (
+            "<h2>运行变量</h2>\n"
+            "<table class='env'>\n"
+            "<thead><tr><th>variable</th><th>value</th></tr></thead>\n"
+            f"<tbody>\n{rows}\n</tbody>\n</table>"
         )
 
     def write(self, out_dir: str | Path) -> dict[str, Path]:
@@ -238,6 +290,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   .kv {{ margin: .25rem 0; }}
   .kv .k {{ color: #57606a; margin-right: .5rem; font-weight: 600; }}
   details summary {{ cursor: pointer; color: #0969da; }}
+  h2 {{ font-size: 1.1rem; margin: 1.5rem 0 .5rem; }}
+  table.env {{ width: auto; margin-bottom: 1rem; }}
+  table.env td.envk {{ color: #57606a; font-weight: 600; }}
+  table.env code {{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }}
 </style>
 </head>
 <body>
@@ -246,6 +302,8 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   <span class="verdict {verdict_class}">{verdict_text}</span>
   &nbsp; 总数 {total} · 通过 {passed} · 失败 {failed} · 错误 {errored} · 耗时 {duration}ms
 </div>
+{env}
+<h2>用例结果</h2>
 <table>
 <thead>
 <tr><th>status</th><th>id</th><th>name</th><th>expected</th><th>actual</th>
@@ -261,4 +319,4 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 
 
 # 便捷别名：asdict 用于需要直接序列化 dataclass 的场景
-__all__ = ["CaseResult", "Report", "asdict"]
+__all__ = ["CaseResult", "Report", "asdict", "mask_secret"]
