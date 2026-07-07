@@ -44,6 +44,7 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `succeeded_has_last_frame` | 开启 `return_last_frame:true` 后，成功响应含 `content.last_frame_url`（尾帧图 URL） |
 | `create_error_status` | 创建任务返回 4xx（负向用例） |
 | `error_schema` | 错误响应通过 `error_response.schema.json` |
+| `error_code_matches` | `error.code` 精确等于 case 声明的 `expected_error_code`（负向用例） |
 
 计费字段（`usage`）不写死数值，仅由 schema 约束类型与 `minimum: 1`。
 
@@ -60,7 +61,13 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 
 外加一个尾帧透传用例：文生视频开启 `return_last_frame: true`，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现）。
 
-外加一个负向用例：用不存在的模型 ID 触发错误响应，校验错误格式兼容性。
+外加两个负向用例：
+
+- 用不存在的模型 ID 触发错误响应，校验错误格式兼容性。
+- 首尾帧传含**真人**的图（火山官方真人示例图）创建视频，兼容火山方舟的实现应做真人 / 隐私检测并拒绝，返回 4xx 且 `error.code` 精确为 `InputImageSensitiveContentDetected.PrivacyInformation`（用于暴露未透传真人图片检测错误的被测实现）。
+
+> `prompt` / `first_frame_url` / `last_frame_url` 等素材字段支持在单个 case 中覆盖全局配置，
+> 负向用例可声明 `expected_error_code` 供 `error_code_matches` 校验精确错误码。
 
 ### 输入素材
 

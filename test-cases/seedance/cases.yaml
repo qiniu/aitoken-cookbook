@@ -23,9 +23,12 @@
 #   succeeded_has_last_frame        开启 return_last_frame:true 后，成功响应含 content.last_frame_url（尾帧图）
 #   create_error_status             创建任务返回 4xx（负向用例）
 #   error_schema                    错误响应通过 error_response.schema.json（{error:{code,message,...}}）
+#   error_code_matches              error.code 精确等于 case 声明的 expected_error_code（负向用例）
 #
-# 单个 case 可用字段覆盖全局：model / resolution / ratio / duration，
-# 以及可选开关 seed / camera_fixed / watermark / generate_audio / return_last_frame。
+# 单个 case 可用字段覆盖全局：model / prompt / resolution / ratio / duration /
+# first_frame_url / last_frame_url / reference_*_url，以及可选开关
+# seed / camera_fixed / watermark / generate_audio / return_last_frame；
+# 负向用例可声明 expected_error_code 供 error_code_matches 校验。
 
 # ---------- 全局配置 ----------
 
@@ -134,3 +137,23 @@ cases:
     # 用一个不存在的模型 ID 触发错误响应，校验错误格式兼容火山
     model: doubao-seedance-model-does-not-exist
     checks: [create_error_status, error_schema]
+
+  # ---------- 负向用例：真人图片被隐私检测拒绝 ----------
+  # 首/尾帧传含真人的图，创建视频时兼容火山方舟的实现应做真人/隐私检测并拒绝，
+  # 返回 4xx + error.code=InputImageSensitiveContentDetected.PrivacyInformation。
+  # 用于暴露未透传火山真人图片检测错误的被测实现（如直接放行或返回别的错误码）。
+  - id: real_person_rejected
+    name: 真人图片被拒（首尾帧含真人，应返回 4xx + 隐私检测错误码）
+    scenario: start_end_to_video
+    # 真人检测是服务端能力，model 不硬编码，跟随全局被测模型
+    prompt: "图中女孩对着镜头说“茄子”，360度环绕运镜"
+    # 火山官方真人示例图（含真人，会命中隐私检测）
+    first_frame_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/seepro_first_frame.jpeg"
+    last_frame_url: "https://ark-project.tos-cn-beijing.volces.com/doc_image/seepro_last_frame.jpeg"
+    ratio: adaptive
+    duration: 5
+    generate_audio: true
+    watermark: false
+    # 期望的精确错误码；error_code_matches 会断言 error.code 与此完全一致
+    expected_error_code: "InputImageSensitiveContentDetected.PrivacyInformation"
+    checks: [create_error_status, error_schema, error_code_matches]

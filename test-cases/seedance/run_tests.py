@@ -170,9 +170,19 @@ def load_cases() -> tuple[dict, list[dict]]:
     return config, data.get("cases", [])
 
 
-def build_content(scenario: str, cfg: dict) -> list[dict]:
-    """按场景拼 content[] 数组（type/role 符合火山方舟格式）。"""
-    prompt = cfg["prompt"]
+def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[dict]:
+    """按场景拼 content[] 数组（type/role 符合火山方舟格式）。
+
+    prompt / first_frame_url / last_frame_url 支持 case 级覆盖：case 显式声明时
+    优先于全局配置（与 resolution/ratio/duration 的 case 优先模式一致），
+    便于负向用例指定特定素材（如真人图片）而不影响其他用例。
+    """
+    case = case or {}
+
+    def pick(key: str) -> str:
+        return case.get(key, cfg.get(key, ""))
+
+    prompt = pick("prompt")
     text_item = {"type": "text", "text": prompt}
 
     if scenario == "text_to_video":
@@ -181,22 +191,22 @@ def build_content(scenario: str, cfg: dict) -> list[dict]:
     if scenario == "image_to_video":
         return [
             text_item,
-            {"type": "image_url", "image_url": {"url": cfg["first_frame_url"]}, "role": "first_frame"},
+            {"type": "image_url", "image_url": {"url": pick("first_frame_url")}, "role": "first_frame"},
         ]
 
     if scenario == "start_end_to_video":
         return [
             text_item,
-            {"type": "image_url", "image_url": {"url": cfg["first_frame_url"]}, "role": "first_frame"},
-            {"type": "image_url", "image_url": {"url": cfg["last_frame_url"]}, "role": "last_frame"},
+            {"type": "image_url", "image_url": {"url": pick("first_frame_url")}, "role": "first_frame"},
+            {"type": "image_url", "image_url": {"url": pick("last_frame_url")}, "role": "last_frame"},
         ]
 
     if scenario == "multimodal_reference":
         return [
             text_item,
-            {"type": "image_url", "image_url": {"url": cfg["reference_image_url"]}, "role": "reference_image"},
-            {"type": "video_url", "video_url": {"url": cfg["reference_video_url"]}, "role": "reference_video"},
-            {"type": "audio_url", "audio_url": {"url": cfg["reference_audio_url"]}, "role": "reference_audio"},
+            {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
+            {"type": "video_url", "video_url": {"url": pick("reference_video_url")}, "role": "reference_video"},
+            {"type": "audio_url", "audio_url": {"url": pick("reference_audio_url")}, "role": "reference_audio"},
         ]
 
     raise ValueError(f"未知 scenario：{scenario}")
@@ -318,7 +328,7 @@ def poll_task(base_url: str, api_key: str, task_id: str, *, interval: int,
 
 def run_checks(checks: list[str], schemas: dict, *, create_status: int,
                create_resp: dict, query_status: int, query_resp: dict,
-               polled: bool) -> tuple[str, str, object, object]:
+               polled: bool, expected_error_code: str | None = None) -> tuple[str, str, object, object]:
     """执行校验项，返回 (status, error, expected, actual)。
 
     任一 check 不通过即 fail，error 记录首个失败原因。
@@ -348,6 +358,15 @@ def run_checks(checks: list[str], schemas: dict, *, create_status: int,
             err = validate_schema(schemas["error"], create_resp)
             if err:
                 return "fail", f"错误响应不符合 schema：{err}", None, None
+
+        elif check == "error_code_matches":
+            # 负向用例：断言 error.code 精确等于 case 声明的 expected_error_code。
+            # 用于校验被测服务透传了火山方舟的特定错误码（如真人图片隐私检测）。
+            if not expected_error_code:
+                return "fail", "error_code_matches 需在 case 中声明 expected_error_code", None, None
+            actual_code = get_path(create_resp, "error.code")
+            if actual_code != expected_error_code:
+                return "fail", f"error.code 期望 {expected_error_code}，实际 {actual_code}", expected_error_code, actual_code
 
         elif check == "query_status_200":
             if query_status != 200:
@@ -411,7 +430,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
 
     # 构造创建请求体
     try:
-        content = build_content(scenario, config)
+        content = build_content(scenario, config, case)
         create_body = build_create_body(case_model, content, config, case)
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
@@ -479,6 +498,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
         checks, schemas,
         create_status=create_status, create_resp=create_resp,
         query_status=query_status, query_resp=query_resp, polled=polled,
+        expected_error_code=case.get("expected_error_code"),
     )
 
     return CaseResult(
