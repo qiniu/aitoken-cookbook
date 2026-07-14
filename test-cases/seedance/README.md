@@ -57,15 +57,17 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 |------|------|------|
 | `text_to_video` | `[text]` | 无 |
 | `image_to_video` | `[text, image_url(first_frame)]` | 1 图 URL |
+| `reference_to_video` | `[text, image_url(reference_image)]` | 1 参考图 URL |
 | `start_end_to_video` | `[text, image_url(first_frame), image_url(last_frame)]` | 2 图 URL |
 | `multimodal_reference` | `[text, reference_image, reference_video, reference_audio]` | 多素材 URL |
 
 外加一个尾帧透传用例：文生视频开启 `return_last_frame: true`，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现）。
 
-外加两个负向用例：
+外加三个负向用例：
 
 - 用不存在的模型 ID 触发错误响应，校验错误格式兼容性。
 - 首尾帧传含**真人**的图（火山官方真人示例图）创建视频，兼容火山方舟的实现应做真人 / 隐私检测并拒绝，返回 4xx 且 `error.code` 精确为 `InputImageSensitiveContentDetected.PrivacyInformation`（用于暴露未透传真人图片检测错误的被测实现）。
+- 参考图用不存在的 `asset://` 素材引用创建视频，兼容火山方舟的实现应校验素材引用并拒绝，返回 4xx 且 `error.code` 精确为 `InvalidParameter`（用于暴露未校验 asset 引用或返回别的错误码的被测实现）。
 
 > `prompt` / `first_frame_url` / `last_frame_url` 等素材字段支持在单个 case 中覆盖全局配置，
 > 负向用例可声明 `expected_error_code` 供 `error_code_matches` 校验精确错误码。

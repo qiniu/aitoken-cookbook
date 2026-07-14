@@ -170,3 +170,21 @@ cases:
     # 期望的精确错误码；error_code_matches 会断言 error.code 与此完全一致
     expected_error_code: "InputImageSensitiveContentDetected.PrivacyInformation"
     checks: [create_error_status, error_schema, error_code_matches]
+
+  # ---------- 负向用例：无效素材（asset:// 引用不存在）----------
+  # 参考图用不存在的 asset:// 引用（素材未入库），兼容火山方舟的实现应返回
+  # 4xx + error.code=InvalidParameter，message 指明 content[1].image_url.url
+  # 引用的素材未找到。用于暴露未校验 asset 引用或返回别的错误码的被测实现。
+  - id: invalid_asset_reference
+    name: 无效素材被拒（参考图 asset:// 不存在，应返回 4xx + InvalidParameter）
+    scenario: reference_to_video
+    prompt: "图片1在骑马"
+    # 不存在的素材引用：服务端查不到该 asset 应报参数非法
+    reference_image_url: "asset://asset-20260713010647-nn8f9"
+    ratio: "16:9"
+    duration: 5
+    generate_audio: true
+    watermark: false
+    # 期望的精确错误码；error_code_matches 会断言 error.code 与此完全一致
+    expected_error_code: "InvalidParameter"
+    checks: [create_error_status, error_schema, error_code_matches]

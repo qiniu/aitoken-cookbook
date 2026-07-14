@@ -194,6 +194,13 @@ def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[di
             {"type": "image_url", "image_url": {"url": pick("first_frame_url")}, "role": "first_frame"},
         ]
 
+    if scenario == "reference_to_video":
+        # 单张参考图生视频：content=[text, reference_image]
+        return [
+            text_item,
+            {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
+        ]
+
     if scenario == "start_end_to_video":
         return [
             text_item,
