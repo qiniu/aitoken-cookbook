@@ -195,10 +195,19 @@ def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[di
         ]
 
     if scenario == "reference_to_video":
-        # 单张参考图生视频：content=[text, reference_image]
+        # 参考图生视频：content=[text, reference_image, ...]。
+        # case 声明 reference_image_urls（列表）时按多图参考展开，每个 URL 一个
+        # role=reference_image 项（Seedance 2.0 多图参考用法）；未声明时回退到
+        # 单个 reference_image_url，保持向后兼容。
+        ref_urls = case.get("reference_image_urls")
+        if not ref_urls:
+            ref_urls = [pick("reference_image_url")]
         return [
             text_item,
-            {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
+            *[
+                {"type": "image_url", "image_url": {"url": url}, "role": "reference_image"}
+                for url in ref_urls
+            ],
         ]
 
     if scenario == "start_end_to_video":

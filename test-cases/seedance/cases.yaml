@@ -171,6 +171,33 @@ cases:
     expected_error_code: "InputImageSensitiveContentDetected.PrivacyInformation"
     checks: [create_error_status, error_schema, error_code_matches]
 
+  # ---------- 正向用例：多图参考（火山官方公开素材 asset://）----------
+  # 参考图用两个火山官方公开素材的 asset:// 引用（已入库、公开可用）：
+  #   asset-20260224190652-n8sd2  洛丽塔连衣裙
+  #   asset-20260401123823-6d4x2  中国 26 岁女性网红/主播
+  # prompt 让「图2的女生穿上图1的洛丽塔裙」，多图参考合成一段视频，轮询到成功。
+  # 与下方 invalid_asset_reference（不存在的 asset://）互为正反面：验证兼容火山方舟
+  # 的实现能正确解析有效的 asset:// 引用并生成视频。
+  - id: reference_to_video_assets
+    name: 多图参考生视频 全流程（火山官方公开素材 asset://，人+裙合成）
+    scenario: reference_to_video
+    prompt: "图2中的女生穿上图1中的洛丽塔连衣裙，在阳光下的花园里优雅转圈，镜头缓缓环绕"
+    reference_image_urls:
+      - "asset://asset-20260224190652-n8sd2"   # 图1：洛丽塔连衣裙
+      - "asset://asset-20260401123823-6d4x2"   # 图2：中国 26 岁女性网红/主播
+    ratio: "16:9"
+    duration: 5
+    generate_audio: true
+    watermark: false
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
   # ---------- 负向用例：无效素材（asset:// 引用不存在）----------
   # 参考图用不存在的 asset:// 引用（素材未入库），兼容火山方舟的实现应返回
   # 4xx + error.code=InvalidParameter，message 指明 content[1].image_url.url

@@ -57,11 +57,13 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 |------|------|------|
 | `text_to_video` | `[text]` | 无 |
 | `image_to_video` | `[text, image_url(first_frame)]` | 1 图 URL |
-| `reference_to_video` | `[text, image_url(reference_image)]` | 1 参考图 URL |
+| `reference_to_video` | `[text, image_url(reference_image), ...]` | 1 参考图 URL；case 声明 `reference_image_urls`（列表）可传多张 |
 | `start_end_to_video` | `[text, image_url(first_frame), image_url(last_frame)]` | 2 图 URL |
 | `multimodal_reference` | `[text, reference_image, reference_video, reference_audio]` | 多素材 URL |
 
 外加一个尾帧透传用例：文生视频开启 `return_last_frame: true`，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现）。
+
+外加一个多图参考正向用例：参考图传两个**火山官方公开素材**的 `asset://` 引用（`asset-20260224190652-n8sd2` 洛丽塔连衣裙、`asset-20260401123823-6d4x2` 中国 26 岁女性网红），prompt 让「图2的女生穿上图1的裙子」，多图参考合成并轮询到成功。与下方无效素材负向用例互为正反面，验证兼容火山方舟的实现能正确解析有效 `asset://` 引用并生成视频。
 
 外加三个负向用例：
 
