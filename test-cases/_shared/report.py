@@ -43,6 +43,9 @@ class CaseResult:
     error: str | None = None
     duration_ms: int = 0
     details: dict[str, Any] = field(default_factory=dict)
+    # 警告：不影响 pass/fail 的软校验提示（如「视频链接不是火山原生链接」）。
+    # 默认空列表，未使用该能力的套件（gpt-image-2 等）行为不变。
+    warnings: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         """转为字典，固定字段顺序，便于人读与 diff。"""
@@ -53,6 +56,7 @@ class CaseResult:
             "expected": self.expected,
             "actual": self.actual,
             "error": self.error,
+            "warnings": self.warnings,
             "duration_ms": self.duration_ms,
             "details": self.details,
         }
@@ -93,15 +97,20 @@ class Report:
     env: dict[str, Any] = field(default_factory=dict)
 
     def summary(self) -> dict[str, int]:
-        """统计总数与各状态数量、总耗时。"""
+        """统计总数与各状态数量、总耗时。
+
+        warned 仅统计带警告的 case 数，用于展示，不参与 pass/fail 判定。
+        """
         passed = sum(1 for c in self.cases if c.status == "pass")
         failed = sum(1 for c in self.cases if c.status == "fail")
         errored = sum(1 for c in self.cases if c.status == "error")
+        warned = sum(1 for c in self.cases if c.warnings)
         return {
             "total": len(self.cases),
             "passed": passed,
             "failed": failed,
             "errored": errored,
+            "warned": warned,
             "duration_ms": sum(c.duration_ms for c in self.cases),
         }
 
@@ -133,7 +142,7 @@ class Report:
             "",
             f"**结果**：{verdict}　|　"
             f"总数 {s['total']}　通过 {s['passed']}　失败 {s['failed']}　"
-            f"错误 {s['errored']}　耗时 {s['duration_ms']}ms",
+            f"错误 {s['errored']}　警告 {s['warned']}　耗时 {s['duration_ms']}ms",
             "",
         ]
         # 运行变量区块：记录本次测试用的环境变量
@@ -146,15 +155,16 @@ class Report:
                 lines.append(f"| {_md_cell(k)} | {_md_cell(v)} |")
             lines.append("")
         lines += [
-            "| status | id | name | expected | actual | error | duration |",
-            "|--------|----|------|----------|--------|-------|----------|",
+            "| status | id | name | expected | actual | error | warnings | duration |",
+            "|--------|----|------|----------|--------|-------|----------|----------|",
         ]
         for c in self.cases:
             icon = _STATUS_ICON.get(c.status, c.status)
+            warn_cell = _md_cell("；".join(c.warnings)) if c.warnings else ""
             lines.append(
                 f"| {icon} | {c.id} | {c.name} | "
                 f"{_md_cell(c.expected)} | {_md_cell(c.actual)} | "
-                f"{_md_cell(c.error)} | {c.duration_ms}ms |"
+                f"{_md_cell(c.error)} | {warn_cell} | {c.duration_ms}ms |"
             )
         lines.append("")
         return "\n".join(lines)
@@ -173,6 +183,7 @@ class Report:
             passed=s["passed"],
             failed=s["failed"],
             errored=s["errored"],
+            warned=s["warned"],
             duration=s["duration_ms"],
             env=self._env_html(),
             rows=rows,
@@ -247,14 +258,18 @@ def _html_row(case: CaseResult) -> str:
             for k, v in case.details.items()
         )
         details_html = f"<details><summary>details</summary>{items}</details>"
+    # 警告单元格：多条警告分行展示；带警告的行追加 warned class 以淡黄底提示
+    warn_html = "<br>".join(_html.escape(w) for w in case.warnings)
+    row_class = case.status + (" warned" if case.warnings else "")
     return (
-        f"<tr class='{_html.escape(case.status)}'>"
+        f"<tr class='{_html.escape(row_class)}'>"
         f"<td class='status'>{icon}</td>"
         f"<td>{_html.escape(case.id)}</td>"
         f"<td>{_html.escape(case.name)}</td>"
         f"<td>{_html.escape('' if case.expected is None else str(case.expected))}</td>"
         f"<td>{_html.escape('' if case.actual is None else str(case.actual))}</td>"
         f"<td class='err'>{_html.escape(case.error or '')}</td>"
+        f"<td class='warn'>{warn_html}</td>"
         f"<td>{case.duration_ms}ms</td>"
         f"<td>{details_html}</td>"
         f"</tr>"
@@ -284,7 +299,9 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   tr.fail .status, tr.error .status {{ color: #cf222e; font-weight: 700; }}
   tr.fail {{ background: #fff5f5; }}
   tr.error {{ background: #fff8f0; }}
+  tr.pass.warned {{ background: #fffbe6; }}
   .err {{ color: #cf222e; }}
+  .warn {{ color: #9a6700; }}
   img, video {{ max-width: 240px; max-height: 240px; border-radius: 6px;
                 display: block; margin: .3rem 0; }}
   .kv {{ margin: .25rem 0; }}
@@ -300,14 +317,14 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <h1>测试报告：{model}</h1>
 <div class="meta">
   <span class="verdict {verdict_class}">{verdict_text}</span>
-  &nbsp; 总数 {total} · 通过 {passed} · 失败 {failed} · 错误 {errored} · 耗时 {duration}ms
+  &nbsp; 总数 {total} · 通过 {passed} · 失败 {failed} · 错误 {errored} · 警告 {warned} · 耗时 {duration}ms
 </div>
 {env}
 <h2>用例结果</h2>
 <table>
 <thead>
 <tr><th>status</th><th>id</th><th>name</th><th>expected</th><th>actual</th>
-<th>error</th><th>duration</th><th>details</th></tr>
+<th>error</th><th>warnings</th><th>duration</th><th>details</th></tr>
 </thead>
 <tbody>
 {rows}

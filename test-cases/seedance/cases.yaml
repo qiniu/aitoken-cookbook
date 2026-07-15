@@ -26,10 +26,15 @@
 #   error_code_matches              error.code 精确等于 case 声明的 expected_error_code（负向用例）
 #   status_queued_or_running        首次查询 status 为 queued 或 running（进行中态）
 #
+# 可用的 warn_checks（软校验，警告级，不影响 pass/fail，仅提示）：
+#   id_volc_format                  创建与查询响应的 id 均为火山格式（cgt-14位时间戳-随机串，如 cgt-20260420145835-68j7n）
+#   video_url_is_volc               成功响应 content.video_url 为火山链接（host 以 volces.com 结尾）
+#
 # 单个 case 可用字段覆盖全局：model / prompt / resolution / ratio / duration /
 # first_frame_url / last_frame_url / reference_*_url，以及可选开关
 # seed / camera_fixed / watermark / generate_audio / return_last_frame；
 # 负向用例可声明 expected_error_code 供 error_code_matches 校验。
+# warn_checks: [...]  软校验，不满足只记警告、不判 fail（用于「火山原生格式」这类兼容性提示）。
 # poll: once  仅创建后查询一次，不轮询到终态（与全局 --no-poll 等效，但只作用于该 case）。
 
 # ---------- 全局配置 ----------
@@ -74,7 +79,7 @@ cases:
       - status_queued_or_running
 
   - id: t2v_full
-    name: 文生视频 全流程（轮询到成功 + 计费字段）
+    name: 文生视频 全流程（轮询到成功 + 计费字段 + 火山原生格式）
     scenario: text_to_video
     checks:
       - create_status_200
@@ -84,6 +89,11 @@ cases:
       - reached_succeeded
       - succeeded_schema
       - usage_total_equals_completion
+    # 软校验（警告级，不影响 pass/fail）：复用本用例已生成的视频，额外提示任务 id
+    # 与视频链接是否为火山原生格式；不新增视频生成，零额外耗时。
+    warn_checks:
+      - id_volc_format
+      - video_url_is_volc
 
   # ---------- 图生视频-首帧 ----------
   - id: i2v_first_frame

@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import time
 import urllib.error
@@ -57,6 +58,9 @@ TERMINAL_STATUSES = {"succeeded", "failed", "expired", "cancelled"}
 
 # 报告中单个字符串字段保留的最大长度（base64 等会被截断）
 MAX_STR_LEN = 500
+
+# 火山方舟任务 ID 格式：cgt- 前缀 + 14 位时间戳 + - + 短随机串，如 cgt-20260420145835-68j7n
+VOLC_TASK_ID_RE = re.compile(r"^cgt-\d{14}-[a-z0-9]+$")
 
 
 def truncate(value, max_len: int = MAX_STR_LEN):
@@ -437,6 +441,42 @@ def run_checks(checks: list[str], schemas: dict, *, create_status: int,
     return "pass", "", expected_display, actual_display
 
 
+def run_warn_checks(warn_checks: list[str], *, create_resp: dict, query_resp: dict) -> list[str]:
+    """执行软校验（警告级），返回警告消息列表（每条不满足项一条）。
+
+    与 run_checks 不同：软校验不影响 case 的 pass/fail，仅在响应不符合「火山原生格式」
+    时累积一条警告用于提示。值缺失（如任务未成功、无 video_url）时跳过对应软校验，
+    交由硬 schema check 处理，避免重复报噪音。
+    """
+    warnings: list[str] = []
+    for check in warn_checks:
+        if check == "id_volc_format":
+            # 任务 ID 应为火山方舟格式（cgt-14位时间戳-随机串）；创建响应与查询响应的 id 都检查。
+            # 用于提示被测实现自行生成了非火山格式 ID（如 UUID）。
+            create_id = create_resp.get("id") if isinstance(create_resp, dict) else None
+            query_id = query_resp.get("id") if isinstance(query_resp, dict) else None
+            for where, task_id in (("创建响应", create_id), ("查询响应", query_id)):
+                if task_id is not None and not (isinstance(task_id, str) and VOLC_TASK_ID_RE.fullmatch(task_id)):
+                    warnings.append(
+                        f"{where} id 非火山格式（期望形如 cgt-20260420145835-68j7n），实际 {task_id!r}"
+                    )
+
+        elif check == "video_url_is_volc":
+            # 成功态生成视频链接应为火山域名（host 以 volces.com 结尾）；
+            # 用于提示被测实现把视频转存到自有 CDN、未透传火山原始链接。
+            video_url = get_path(query_resp, "content.video_url")
+            if isinstance(video_url, str) and video_url:
+                host = urllib.parse.urlparse(video_url).hostname
+                if not (host and (host == "volces.com" or host.endswith(".volces.com"))):
+                    warnings.append(
+                        f"content.video_url 非火山链接（host 期望以 volces.com 结尾），实际 {video_url!r}"
+                    )
+
+        else:
+            warnings.append(f"未知 warn_check：{check}")
+    return warnings
+
+
 # ==================== 单个 case 执行 ====================
 
 
@@ -447,6 +487,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
     name = case.get("name", cid)
     scenario = case.get("scenario", "text_to_video")
     checks = case.get("checks", [])
+    warn_checks = case.get("warn_checks", [])
     case_model = case.get("model", model)
     case_no_poll = no_poll or case.get("poll") == "once"
 
@@ -477,6 +518,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
                 "create_url": create_url,
                 "create_body": truncate(create_body),
                 "checks": checks,
+                "warn_checks": warn_checks,
             },
         )
 
@@ -527,9 +569,13 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
         expected_error_code=case.get("expected_error_code"),
     )
 
+    # 软校验：火山原生格式提示，不影响 verdict，仅累积为警告
+    warnings = run_warn_checks(warn_checks, create_resp=create_resp, query_resp=query_resp)
+
     return CaseResult(
         id=cid, name=name, status=verdict, error=error or None,
         expected=expected, actual=actual, duration_ms=elapsed,
+        warnings=warnings,
         details={
             **base_details,
             "task_id": task_id,
@@ -537,6 +583,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
             "task_status": query_resp.get("status") if isinstance(query_resp, dict) else None,
             "usage": query_resp.get("usage") if isinstance(query_resp, dict) else None,
             "checks": checks,
+            "warn_checks": warn_checks,
             # 完整记录请求与响应，便于失败时定位（长字符串已截断）
             "create_url": create_url,
             "create_body": truncate(create_body),
@@ -607,7 +654,7 @@ def main() -> int:
     s = report.summary()
     verdict = "PASS" if report.passed else "FAIL"
     print(f"{model}: {verdict}  total={s['total']} pass={s['passed']} "
-          f"fail={s['failed']} error={s['errored']} ({s['duration_ms']}ms)")
+          f"fail={s['failed']} error={s['errored']} warn={s['warned']} ({s['duration_ms']}ms)")
     print("报告已写入：" + "、".join(str(p) for p in paths.values()))
     return 0 if report.passed else 1
 

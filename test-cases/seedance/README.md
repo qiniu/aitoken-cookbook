@@ -49,6 +49,15 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 
 计费字段（`usage`）不写死数值，仅由 schema 约束类型与 `minimum: 1`。
 
+### 软校验（`warn_checks`）
+
+除硬校验（`checks`，不通过即 fail）外，case 可声明 `warn_checks` 软校验：**不满足只记录警告、不影响 pass/fail**，用于「火山原生格式」这类兼容性提示（被测服务可能有意改写，不算错误）。警告会出现在报告的 `warnings` 列与摘要「警告 N」计数中。
+
+| warn_check | 含义 |
+|------|------|
+| `id_volc_format` | 创建与查询响应的 `id` 均为火山格式（`cgt-` + 14 位时间戳 + `-` + 随机串，如 `cgt-20260420145835-68j7n`）；否则提示自行生成了非火山格式 ID（如 UUID） |
+| `video_url_is_volc` | 成功响应 `content.video_url` 为火山链接（host 以 `volces.com` 结尾）；否则提示视频被转存到自有 CDN、未透传火山原始链接 |
+
 ## 用例
 
 用例定义见 [cases.yaml](cases.yaml)，每个 case 通过 `scenario` 字段选择生成场景：
@@ -60,6 +69,8 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `reference_to_video` | `[text, image_url(reference_image)]` | 1 参考图 URL |
 | `start_end_to_video` | `[text, image_url(first_frame), image_url(last_frame)]` | 2 图 URL |
 | `multimodal_reference` | `[text, reference_image, reference_video, reference_audio]` | 多素材 URL |
+
+文生视频全流程用例（`t2v_full`）复用其已生成的视频，额外做两项**软校验（警告级，不影响 pass/fail）**：任务 id 与视频链接是否为**火山原生格式**（`id_volc_format` + `video_url_is_volc`）——id 形如 `cgt-20260420145835-68j7n`，`content.video_url` 的 host 以 `volces.com` 结尾。不满足只在报告里记一条警告（提示自行生成非火山格式 ID 或把视频转存到自有 CDN），不判失败；挂在已有用例上，不新增视频生成、零额外耗时。详见下文[软校验](#软校验warn_checks)。
 
 外加一个尾帧透传用例：文生视频开启 `return_last_frame: true`，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现）。
 
@@ -141,7 +152,9 @@ python run_tests.py --dry-run
 
 运行后在 `reports/` 下生成 `report.json` / `report.md` / `report.html`
 三份报告，格式见 [test-cases 总览](../README.md#结果格式)。
-进程退出码：全部通过为 0，否则为 1。
+进程退出码：全部通过为 0，否则为 1（**软校验警告不影响退出码**）。
+
+`warn_checks` 产生的软校验警告记录在每个 case 的 `warnings` 列，摘要行以「警告 N」计数，HTML 报告中带警告的通过用例以淡黄底标记。
 
 每个 case 的 `details` 会完整记录本次请求与响应，便于失败定位：
 
