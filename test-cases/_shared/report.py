@@ -64,6 +64,15 @@ class CaseResult:
 
 # 状态对应的展示符号
 _STATUS_ICON = {"pass": "✓", "fail": "✗", "error": "!"}
+# 通过但带软校验警告时的图标：用警告符号替代对勾，一眼可辨
+_WARN_ICON = "⚠"
+
+
+def _case_icon(case: "CaseResult") -> str:
+    """case 的展示图标：通过但带警告时显示警告符号，而非对勾。"""
+    if case.status == "pass" and case.warnings:
+        return _WARN_ICON
+    return _STATUS_ICON.get(case.status, case.status)
 
 
 def mask_secret(value: str, *, head: int = 4, tail: int = 4) -> str:
@@ -159,7 +168,7 @@ class Report:
             "|--------|----|------|----------|--------|-------|----------|----------|",
         ]
         for c in self.cases:
-            icon = _STATUS_ICON.get(c.status, c.status)
+            icon = _case_icon(c)
             warn_cell = _md_cell("；".join(c.warnings)) if c.warnings else ""
             lines.append(
                 f"| {icon} | {c.id} | {c.name} | "
@@ -249,7 +258,7 @@ def _render_detail_value(key: str, value: Any) -> str:
 
 def _html_row(case: CaseResult) -> str:
     """生成 HTML 表格中的一行（含 details 折叠区）。"""
-    icon = _STATUS_ICON.get(case.status, case.status)
+    icon = _case_icon(case)
     details_html = ""
     if case.details:
         items = "".join(
@@ -300,6 +309,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   tr.fail {{ background: #fff5f5; }}
   tr.error {{ background: #fff8f0; }}
   tr.pass.warned {{ background: #fffbe6; }}
+  tr.pass.warned .status {{ color: #9a6700; }}
   .err {{ color: #cf222e; }}
   .warn {{ color: #9a6700; }}
   img, video {{ max-width: 240px; max-height: 240px; border-radius: 6px;
