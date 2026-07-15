@@ -59,10 +59,11 @@
 | `error_status_4xx` | HTTP 4xx（负向用例） |
 | `error_schema` | 响应通过 `error.schema.json`（负向用例，校验错误格式） |
 
-## 用例：有依赖的生命周期链
+## 用例：有依赖的生命周期链（按依赖并发）
 
-素材资产是「有依赖的生命周期链」，必须**串行执行**，后续 step 通过
-`${group_id}` / `${asset_id}` 占位符引用前序 step 的输出。用例定义见
+素材资产是「有依赖的生命周期链」，后续 step 通过 `${group_id}` / `${asset_id}`
+占位符引用前序 step 的输出。但链上并非所有 step 相互依赖：**执行器按依赖图并发调度**，
+无依赖或依赖已完成的 step 并行执行，删除清理 step 最后串行。用例定义见
 [cases.yaml](cases.yaml)：
 
 1. `CreateAssetGroup` 建组 → 捕获 `group_id`
@@ -77,9 +78,17 @@
 10. `DeleteAsset` 删除素材 → 校验 `Result` 空对象（放最后，顺带清理本次创建的资源）
 11. `DeleteAssetGroup` 删除素材组 → 校验 `Result` 空对象
 
-删除 step 放在最后，既覆盖删除接口，又顺带清理本次测试创建的素材与素材组，
-避免在被测账号下残留垃圾数据。前置生命周期 step 失败时，依赖它的后续 step
-（含 update/delete）会被跳过（标记 error）。
+**并发调度**：每个常规 step 依据它引用的 `${var}` 占位符（由前序 step `capture` 产出）
+与显式声明的 `needs`（仅排序、不要求前置成功）推导前置依赖，无依赖或依赖已完成的 step
+并发执行。例如 `CreateVisualValidateSession` 与负向的非法 `GetAsset` 完全独立，从一开始就
+与主链并行；`ListAssetGroups` / `UpdateAssetGroup` 只依赖 `group_id`，与整条 asset 分支
+并行；`ListAssets` / `UpdateAsset` 声明 `needs: [wait_asset_active]`，等素材 `Active` 后
+并行执行。报告顺序始终与 `cases.yaml` 声明顺序一致（并发只改执行顺序，不改展示顺序）。
+
+删除 step 标 `cleanup: true`，放在并发阶段之后**按声明顺序串行执行**（先删素材再删空组），
+既覆盖删除接口，又顺带清理本次测试创建的资源，避免残留垃圾数据。清理只要引用变量就绪就
+运行，**不被无关 step（如 list/update）失败阻塞**。前置生命周期 step 失败导致其产出变量
+缺失时，引用该变量的后续 step（含 update/delete）会被跳过（标记 error）。
 
 ### 真人认证与真人素材测试（`--real-person`）
 

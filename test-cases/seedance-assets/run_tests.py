@@ -10,10 +10,12 @@
   鉴权    AK/SK 火山 Signature V4 签名（见 volc_sign.py）
   响应    火山信封 {ResponseMetadata:{...,Error}, Result:{...}}
 
-与视频生成套件不同，素材资产是「有依赖的生命周期链」，必须串行执行：
-  建组 CreateAssetGroup → 上传 CreateAsset → 轮询 GetAsset 至 Active
-  → 查询 ListAssets / ListAssetGroups → 真人会话 CreateVisualValidateSession。
-后续 step 通过 ${group_id} / ${asset_id} 占位符引用前序 step 的输出。
+与视频生成套件不同，素材资产是「有依赖的生命周期链」：建组 CreateAssetGroup →
+上传 CreateAsset → 轮询 GetAsset 至 Active → 查询 / 更新 → 删除清理，后续 step 通过
+${group_id} / ${asset_id} 占位符引用前序 step 的输出。但链上并非所有 step 都相互
+依赖：每个常规 step 用 needs 声明硬数据依赖，无依赖或依赖已满足的 step 会并发执行；
+删除清理 step（cleanup:true）延后串行执行，只要引用变量就绪就运行，不被无关 step
+失败阻塞（顺带清理本次创建的资源）。
 
 环境变量：
   API_BASE_URL   必填，被测接口的基础地址，如 https://your-domain.com/api/v3
@@ -23,7 +25,7 @@
                  优先级：环境变量 > cases.yaml 的 project_name > default。
 
 用法：
-  python run_tests.py                  # 串行执行整条常规生命周期链
+  python run_tests.py                  # 按依赖并发执行常规生命周期链（删除清理最后串行）
   python run_tests.py --dry-run        # 跳过真实请求，仅自测请求体构造、占位符替换与 schema 加载
   python run_tests.py --real-person    # 常规链之后附加交互式真人素材测试链（需真实 AK/SK + 测试者刷脸）
 """
@@ -39,6 +41,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -396,6 +399,119 @@ def run_step(step: dict, *, schemas: dict, config: dict, variables: dict,
             "response": truncate(resp),
         },
     ), verdict == "pass"
+
+
+# ==================== 依赖解析与并发调度 ====================
+
+
+def build_producer_map(steps: list[dict]) -> dict:
+    """构建「变量名 → 产出它的 step id」映射（由各 step 的 capture 声明推导）。
+
+    如 create_group 声明 capture: {group_id: Id}，则 group_id 的产出者为 create_group。
+    """
+    producer: dict = {}
+    for step in steps:
+        for var_name in (step.get("capture") or {}):
+            producer[var_name] = step["id"]
+    return producer
+
+
+def step_dependencies(step: dict, producer: dict) -> set[str]:
+    """计算单个 step 必须等待「完成」的前置 step id 集合。
+
+    两类依赖：
+      - 数据依赖：body 里 ${var} 占位符引用的变量若由某 step capture 产出，则该
+        step 为前置（如 create_asset 依赖产出 group_id 的 create_group）；引用 config
+        里的变量（如 project_name）不构成依赖。
+      - 语义依赖：step 显式声明的 needs（仅排序，不要求前置成功；如 list_assets 声明
+        needs:[wait_asset_active]，以便查询到已 Active 的素材）。
+    依赖只要求前置「完成」（无论 pass/fail）；若前置失败导致变量缺失，本 step 会在分发前
+    因变量未就绪被跳过——语义与原串行版本一致。
+    """
+    referenced = collect_placeholders(step.get("body", {}))
+    deps = {producer[v] for v in referenced if v in producer}
+    deps.update(step.get("needs") or [])
+    deps.discard(step["id"])  # 防御：不依赖自身
+    return deps
+
+
+def missing_vars(step: dict, config: dict, variables: dict) -> list[str]:
+    """返回 step 引用但尚未就绪（config 与 variables 均无）的变量名列表。"""
+    referenced = collect_placeholders(step.get("body", {}))
+    return sorted(v for v in referenced if v not in config and v not in variables)
+
+
+def run_normal_steps(normal_steps: list[dict], *, schemas: dict, config: dict,
+                     base_url: str, access_key: str, secret_key: str,
+                     dry_run: bool, max_workers: int) -> tuple[dict, dict]:
+    """按依赖并发执行常规（非 cleanup）step，返回 (results_by_id, variables)。
+
+    调度：无依赖或依赖已全部完成的 step 立即并发提交（如 create_liveness_session、
+    invalid_get_asset_error 从一开始就与主链并行）；某 step 的依赖完成后其引用变量仍
+    缺失（前置失败未 capture），则跳过该 step（标 error），与原串行版本一致。
+
+    并发安全：variables 由主线程在 future 完成时合并各 step 的 capture 结果；分发每个
+    step 前传入 variables 的副本，run_step 把 capture 写入副本、主线程再从 details
+    ["captured"] 合并，避免多线程写同一 dict。
+    """
+    producer = build_producer_map(normal_steps)
+    deps = {s["id"]: step_dependencies(s, producer) for s in normal_steps}
+    by_id = {s["id"]: s for s in normal_steps}
+
+    variables: dict = {}
+    results_by_id: dict = {}
+    done: set[str] = set()
+    pending: set[str] = set(by_id)
+    running: dict = {}  # future -> step id
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        while pending or running:
+            # 分发所有「依赖已完成」的就绪 step
+            ready = [sid for sid in pending if deps[sid] <= done]
+            for sid in ready:
+                step = by_id[sid]
+                miss = [] if dry_run else missing_vars(step, config, variables)
+                if miss:
+                    results_by_id[sid] = CaseResult(
+                        id=sid, name=step.get("name", sid), status="error",
+                        error=f"依赖变量未就绪（前置 step 未产出）：{', '.join(miss)}，跳过该 step",
+                        details={"action": step.get("action"), "skipped": True,
+                                 "missing_vars": miss},
+                    )
+                    pending.discard(sid)
+                    done.add(sid)
+                    continue
+                fut = pool.submit(
+                    run_step, step, schemas=schemas, config=config,
+                    variables=dict(variables), base_url=base_url,
+                    access_key=access_key, secret_key=secret_key, dry_run=dry_run,
+                )
+                running[fut] = sid
+                pending.discard(sid)
+
+            if not running:
+                # 仍有 pending 却无任何在跑：说明存在依赖环或引用了不存在的 step id。
+                for sid in list(pending):
+                    step = by_id[sid]
+                    results_by_id[sid] = CaseResult(
+                        id=sid, name=step.get("name", sid), status="error",
+                        error=f"依赖无法满足（可能存在依赖环或未知依赖）：needs={sorted(deps[sid])}",
+                        details={"action": step.get("action"), "skipped": True},
+                    )
+                pending.clear()
+                break
+
+            # 等至少一个 future 完成，合并其 capture 后回到循环顶部看有无新就绪 step
+            finished, _ = wait(list(running), return_when=FIRST_COMPLETED)
+            for fut in finished:
+                sid = running.pop(fut)
+                result, _ = fut.result()
+                results_by_id[sid] = result
+                for k, v in (result.details.get("captured") or {}).items():
+                    variables[k] = v
+                done.add(sid)
+
+    return results_by_id, variables
 
 
 # ==================== 真人素材测试链（交互式，仅 --real-person）====================
@@ -795,34 +911,44 @@ def main() -> int:
                   file=sys.stderr)
             return 1
 
-    # 串行执行：素材资产是有依赖的生命周期链，后续 step 依赖前序输出。
-    # 一个 step 是否可执行只取决于它实际引用的 ${var} 占位符是否可解析：
-    # 变量要么来自 config（如 ${project_name}），要么由前序 step 成功 capture
-    # （如 ${group_id} / ${asset_id}）。只有当引用的变量缺失时才跳过该 step，
-    # 而不是用粗粒度的「断链」标志牵连无关 step——例如 list_assets 失败不产出
-    # 任何变量，delete_asset（只依赖 ${asset_id}）与 delete_asset_group（只依赖
-    # ${group_id}）不应因此被跳过，否则本次创建的资源无法清理。
-    variables: dict = {}
-    results: list[CaseResult] = []
+    # 按依赖并发执行：素材资产是有依赖的生命周期链，但链上并非所有 step 相互依赖。
+    # 每个常规 step 根据它引用的 ${var} 占位符（由前序 step capture 产出）与显式 needs
+    # 推导前置依赖，无依赖或依赖已完成的 step 并发执行——如 create_liveness_session、
+    # invalid_get_asset_error 完全独立，从一开始就与主链并行；list_asset_groups /
+    # update_asset_group 只依赖 group_id，与整条 asset 分支并行。
+    #
+    # 删除清理 step（cleanup:true）单独拎出、放最后按声明顺序串行执行（先删素材再删空组），
+    # 只要引用变量就绪就运行，不被无关 step（如 list/update）失败阻塞——否则本次创建的
+    # 资源无法清理。变量是否就绪的判定与原串行版本一致：引用变量缺失才跳过该 step。
+    normal_steps = [s for s in steps if not s.get("cleanup")]
+    cleanup_steps = [s for s in steps if s.get("cleanup")]
 
-    for step in steps:
-        # 解析该 step body 引用的占位符，找出尚未就绪（config 与 variables 均无）的变量
+    # 并发执行常规 step；max_workers 取常规 step 数（视频套件同款「一次性并发」策略）。
+    results_by_id, variables = run_normal_steps(
+        normal_steps, schemas=schemas, config=config, base_url=base_url,
+        access_key=access_key, secret_key=secret_key, dry_run=args.dry_run,
+        max_workers=max(1, len(normal_steps)),
+    )
+
+    # 清理 step 串行执行：删除有先后（先 asset 后空 group），且需读取并发阶段产出的变量。
+    for step in cleanup_steps:
         if not args.dry_run:
-            referenced = collect_placeholders(step.get("body", {}))
-            missing = sorted(v for v in referenced if v not in config and v not in variables)
-            if missing:
-                results.append(CaseResult(
+            miss = missing_vars(step, config, variables)
+            if miss:
+                results_by_id[step["id"]] = CaseResult(
                     id=step["id"], name=step.get("name", step["id"]), status="error",
-                    error=f"依赖变量未就绪（前置 step 未产出）：{', '.join(missing)}，跳过该 step",
+                    error=f"依赖变量未就绪（前置 step 未产出）：{', '.join(miss)}，跳过该 step",
                     details={"action": step.get("action"), "skipped": True,
-                             "missing_vars": missing},
-                ))
+                             "missing_vars": miss},
+                )
                 continue
-
         result, _ = run_step(step, schemas=schemas, config=config, variables=variables,
                              base_url=base_url, access_key=access_key, secret_key=secret_key,
                              dry_run=args.dry_run)
-        results.append(result)
+        results_by_id[step["id"]] = result
+
+    # 报告顺序保持与 cases.yaml 声明顺序一致（并发只改执行顺序，不改展示顺序）。
+    results: list[CaseResult] = [results_by_id[s["id"]] for s in steps]
 
     # 真人素材测试链（仅 --real-person）：交互式，跑在常规链之后。
     if args.real_person:

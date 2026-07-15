@@ -20,6 +20,13 @@
 #   checks    校验项列表
 #   poll      可选；存在则对该 step 轮询（见下）
 #   capture   可选；把 Result 中某字段存入变量供后续 step 引用
+#   needs     可选；显式声明必须等待「完成」的前置 step id 列表（仅排序，不要求前置
+#             成功）。用于表达占位符之外的语义依赖，如查询/更新素材需等素材 Active。
+#   cleanup   可选；true 表示这是清理 step（如删除），放在并发阶段之后按声明顺序串行
+#             执行，只要引用变量就绪就运行，不被无关 step 失败阻塞。
+#
+# 执行调度：常规 step 按依赖（占位符引用 + needs）并发执行，无依赖或依赖已完成的
+# step 并行跑；cleanup step 最后串行。报告顺序始终与本文件声明顺序一致。
 #
 # poll 轮询配置（仅 wait_asset_active 用）：
 #   until_field   轮询时检查的 Result 字段（如 Status）
@@ -103,6 +110,8 @@ steps:
   - id: list_assets
     name: 查询素材（ListAssets，按 GroupIds + Statuses）
     action: ListAssets
+    # 语义依赖：等素材 Active 后再查，确保列表能查到本次创建的素材
+    needs: [wait_asset_active]
     body:
       # 火山 Filter：GroupType 必填（素材资产为 AIGC）；GroupIds 为数组；
       # Statuses 支持 Active/Processing/Failed
@@ -136,6 +145,8 @@ steps:
   - id: update_asset
     name: 更新素材名称（UpdateAsset）
     action: UpdateAsset
+    # 语义依赖：等素材 Active 后再更新，避免对预处理中的素材改名
+    needs: [wait_asset_active]
     body:
       Id: "${asset_id}"
       Name: "test_asset_image_renamed"
@@ -178,6 +189,8 @@ steps:
   - id: delete_asset
     name: 删除素材（DeleteAsset）
     action: DeleteAsset
+    # cleanup：并发阶段结束后串行执行（先删素材再删空组），不被无关 step 失败阻塞
+    cleanup: true
     body:
       Id: "${asset_id}"
       ProjectName: "${project_name}"
@@ -187,6 +200,8 @@ steps:
   - id: delete_asset_group
     name: 删除素材组（DeleteAssetGroup）
     action: DeleteAssetGroup
+    # cleanup：在 delete_asset 之后串行执行（此时素材组已空）
+    cleanup: true
     body:
       Id: "${group_id}"
       ProjectName: "${project_name}"
