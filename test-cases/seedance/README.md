@@ -70,6 +70,8 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `start_end_to_video` | `[text, image_url(first_frame), image_url(last_frame)]` | 2 图 URL |
 | `multimodal_reference` | `[text, reference_image, reference_video, reference_audio]` | 多素材 URL |
 
+基础文生视频用例（`t2v_basic`）请求 `resolution: 4k` 并轮询到 `succeeded`，校验成功态结构（必有 `content.video_url` 与 `usage`）——`4k`（3840×2160、10bit 位深）仅 **Seedance 2.0**（本套件默认模型 `doubao-seedance-2-0-260128`）支持，用于验证被测服务接受并能完成 4k 视频生成任务；不支持 4k 的实现会在创建时报错或轮询不到 `succeeded`。
+
 文生视频全流程用例（`t2v_full`）复用其已生成的视频，额外做两项**软校验（警告级，不影响 pass/fail）**：任务 id 与视频链接是否为**火山原生格式**（`id_volc_format` + `video_url_is_volc`）——id 形如 `cgt-20260420145835-68j7n`，`content.video_url` 的 host 以 `volces.com` 结尾。不满足只在报告里记一条警告（提示自行生成非火山格式 ID 或把视频转存到自有 CDN），不判失败；挂在已有用例上，不新增视频生成、零额外耗时。详见下文[软校验](#软校验warn_checks)。
 
 外加一个尾帧透传用例：文生视频开启 `return_last_frame: true`，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现）。

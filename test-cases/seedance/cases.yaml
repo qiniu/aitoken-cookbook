@@ -62,10 +62,22 @@ poll_timeout: 1200    # 单个任务轮询总超时（秒）；首尾帧/多模�
 
 cases:
   # ---------- 文生视频 ----------
+  # 4k 分辨率仅 Seedance 2.0（本套件默认模型 doubao-seedance-2-0-260128）支持，输出 3840×2160、
+  # 10bit 位深；480p/720p/1080p 为通用档位。本用例请求 resolution:4k 并轮询到 succeeded，
+  # 校验成功态结构（必有 content.video_url 与 usage），用于验证被测服务接受并能完成 4k 视频生成任务；
+  # 不支持 4k 的实现会在创建时报错或轮询不到 succeeded。
   - id: t2v_basic
-    name: 文生视频 基础连通性（创建 + 查询结构）
+    name: 文生视频 4k 分辨率（轮询到成功出片）
     scenario: text_to_video
-    checks: [create_status_200, create_schema, query_status_200, query_schema]
+    resolution: "4k"
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
 
   - id: t2v_immediate_query
     name: 文生视频 创建后立即查询（queued 态响应结构）
