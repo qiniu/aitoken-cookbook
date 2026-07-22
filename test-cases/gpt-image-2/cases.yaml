@@ -19,6 +19,7 @@
 #   output_tokens_exact usage.output_tokens 等于计算器算出的预期值
 #   size_echo           响应 size 与请求 size 一致
 #   quality_echo        响应 quality 与请求 quality 一致
+#   image_size_actual   解码返回图片读 PNG 真实像素宽高，与请求 size 一致（非仅看回显）
 
 # 文生图（generations）默认提示词
 prompt: "生成一只小猫在草地上"
@@ -34,49 +35,56 @@ cases:
     endpoint: generations
     quality: low
     size: "1024x1024"
-    checks: [status_200, data_exists, usage_exists]
+    checks: [status_200, data_exists, usage_exists, image_size_actual]
 
   - id: gen_size_echo_1024
     name: generations size 参数回显（1024x1024）
     endpoint: generations
     quality: low
     size: "1024x1024"
-    checks: [status_200, size_echo, data_exists]
+    checks: [status_200, size_echo, data_exists, image_size_actual]
 
   - id: gen_quality_echo_low
     name: generations quality 参数回显（low）
     endpoint: generations
     quality: low
     size: "1024x1024"
-    checks: [status_200, quality_echo, data_exists]
+    checks: [status_200, quality_echo, data_exists, image_size_actual]
 
   - id: gen_quality_echo_high
     name: generations quality 参数回显（high）
     endpoint: generations
     quality: high
     size: "1024x1024"
-    checks: [status_200, quality_echo, data_exists]
+    checks: [status_200, quality_echo, data_exists, image_size_actual]
 
   - id: gen_tokens_low_1024
     name: generations output_tokens 精确校验（low 1024x1024，预期 196）
     endpoint: generations
     quality: low
     size: "1024x1024"
-    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
 
   - id: gen_tokens_medium_1024
     name: generations output_tokens 精确校验（medium 1024x1024，预期 1756）
     endpoint: generations
     quality: medium
     size: "1024x1024"
-    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
 
   - id: gen_tokens_high_1024
     name: generations output_tokens 精确校验（high 1024x1024，预期 7024）
     endpoint: generations
     quality: high
     size: "1024x1024"
-    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
+
+  - id: gen_tokens_high_4k
+    name: generations 4K 分辨率高质量（high 2160x3840，预期 13342）
+    endpoint: generations
+    quality: high
+    size: "2160x3840"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
 
   # ---------- edits：图生图 ----------
   - id: edit_connectivity_basic
@@ -84,46 +92,53 @@ cases:
     endpoint: edits
     quality: low
     size: "1024x1024"
-    checks: [status_200, data_exists, usage_exists]
+    checks: [status_200, data_exists, usage_exists, image_size_actual]
 
   - id: edit_size_echo_1024
     name: edits size 参数回显（1024x1024）
     endpoint: edits
     quality: low
     size: "1024x1024"
-    checks: [status_200, size_echo, data_exists]
+    checks: [status_200, size_echo, data_exists, image_size_actual]
 
   - id: edit_quality_echo_low
     name: edits quality 参数回显（low）
     endpoint: edits
     quality: low
     size: "1024x1024"
-    checks: [status_200, quality_echo, data_exists]
+    checks: [status_200, quality_echo, data_exists, image_size_actual]
 
   - id: edit_quality_echo_high
     name: edits quality 参数回显（high）
     endpoint: edits
     quality: high
     size: "1024x1024"
-    checks: [status_200, quality_echo, data_exists]
+    checks: [status_200, quality_echo, data_exists, image_size_actual]
 
   - id: edit_tokens_low_1024
     name: edits output_tokens 精确校验（low 1024x1024，预期 196）
     endpoint: edits
     quality: low
     size: "1024x1024"
-    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
 
   - id: edit_tokens_medium_1024
     name: edits output_tokens 精确校验（medium 1024x1024，预期 1756）
     endpoint: edits
     quality: medium
     size: "1024x1024"
-    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
 
   - id: edit_tokens_high_1024
     name: edits output_tokens 精确校验（high 1024x1024，预期 7024）
     endpoint: edits
     quality: high
     size: "1024x1024"
-    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists]
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]
+
+  - id: edit_tokens_high_4k
+    name: edits 4K 分辨率高质量（high 2160x3840，预期 13342）
+    endpoint: edits
+    quality: high
+    size: "2160x3840"
+    checks: [status_200, usage_exists, output_tokens_typed, output_tokens_exact, data_exists, image_size_actual]

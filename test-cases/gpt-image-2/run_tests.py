@@ -26,6 +26,7 @@ _shared/gpt_image_2_token_calculator.py 按 gpt-image-2 官方算法动态算出
 from __future__ import annotations
 
 import argparse
+import base64
 import importlib.util
 import json
 import os
@@ -86,6 +87,56 @@ def parse_size(size: str) -> tuple[int, int]:
     """把 "1024x1024" 解析为 (width, height)。"""
     width, height = size.lower().split("x", 1)
     return int(width), int(height)
+
+
+# PNG 文件签名（前 8 字节），用于确认返回的确实是 PNG
+PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
+
+
+def extract_image_bytes(resp: dict, timeout: int) -> bytes:
+    """从响应里取出首张图片的原始字节。
+
+    优先解码 data[0].b64_json（base64 PNG）；若服务改为返回 url，则下载该 url 拿字节兜底。
+    取不到时抛 ValueError，由调用方转成校验失败原因。
+    """
+    data = resp.get("data")
+    if not isinstance(data, list) or not data:
+        raise ValueError("data 字段缺失或为空，无法读取图片")
+    first = data[0]
+    if not isinstance(first, dict):
+        raise ValueError("data[0] 不是对象，无法读取图片")
+
+    b64 = first.get("b64_json")
+    if b64:
+        try:
+            return base64.b64decode(b64)
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"b64_json 解码失败：{exc!r}") from exc
+
+    url = first.get("url")
+    if url:
+        try:
+            with urllib.request.urlopen(url, timeout=timeout) as fp:
+                return fp.read()
+        except Exception as exc:  # noqa: BLE001
+            raise ValueError(f"下载图片 url 失败：{exc!r}") from exc
+
+    raise ValueError("data[0] 既无 b64_json 也无 url，无法读取图片")
+
+
+def read_png_size(image_bytes: bytes) -> tuple[int, int]:
+    """解析 PNG 头部，返回 (width, height)。
+
+    PNG 结构：8 字节签名 + IHDR chunk（4 字节长度 + 4 字节 "IHDR" + 4 字节宽 + 4 字节高，均大端）。
+    非 PNG 或字节不足时抛 ValueError。
+    """
+    if len(image_bytes) < 24 or image_bytes[:8] != PNG_SIGNATURE:
+        raise ValueError("返回图片不是 PNG 格式（签名不匹配）")
+    if image_bytes[12:16] != b"IHDR":
+        raise ValueError("PNG 缺少 IHDR 块，无法读取尺寸")
+    width = int.from_bytes(image_bytes[16:20], "big")
+    height = int.from_bytes(image_bytes[20:24], "big")
+    return width, height
 
 
 def get_path(obj, path: str):
@@ -194,7 +245,7 @@ def send_request(url: str, api_key: str, data: bytes, content_type: str,
 
 
 def run_checks(checks: list[str], status: int, resp: dict,
-               req: dict, expected_tokens: int) -> tuple[str, str, object, object]:
+               req: dict, expected_tokens: int, timeout: int) -> tuple[str, str, object, object]:
     """执行校验项，返回 (status, error, expected, actual)。
 
     status: pass / fail；任一 check 不通过即 fail，error 记录首个失败原因。
@@ -238,6 +289,18 @@ def run_checks(checks: list[str], status: int, resp: dict,
             actual_quality = resp.get("quality")
             if actual_quality != req["quality"]:
                 return "fail", f"quality 期望 {req['quality']}，实际 {actual_quality}", req["quality"], actual_quality
+
+        elif check == "image_size_actual":
+            # 不只看响应体回显，而是解码真实图片、读 PNG 头拿到真实像素宽高再比对
+            expected_size = req["size"]
+            try:
+                image_bytes = extract_image_bytes(resp, timeout)
+                width, height = read_png_size(image_bytes)
+            except ValueError as exc:
+                return "fail", f"真实尺寸校验失败：{exc}", expected_size, None
+            actual_size = f"{width}x{height}"
+            if actual_size != expected_size:
+                return "fail", f"真实图片尺寸期望 {expected_size}，实际 {actual_size}", expected_size, actual_size
 
         else:
             return "fail", f"未知 check：{check}", None, None
@@ -335,7 +398,7 @@ def run_case(case: dict, *, calc, config: dict, model: str, base_url: str,
         )
     elapsed = int((time.monotonic() - start) * 1000)
 
-    verdict, error, expected, actual = run_checks(checks, status, resp, req, expected_tokens)
+    verdict, error, expected, actual = run_checks(checks, status, resp, req, expected_tokens, timeout)
     return CaseResult(
         id=cid, name=name, status=verdict, error=error or None,
         expected=expected, actual=actual, duration_ms=elapsed,
