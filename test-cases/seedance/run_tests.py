@@ -318,20 +318,26 @@ def send_request(url: str, api_key: str, method: str, body: dict | None,
 
 
 def poll_task(base_url: str, api_key: str, task_id: str, *, interval: int,
-              timeout_total: int, no_poll: bool) -> tuple[int, dict, int]:
-    """轮询查询任务状态，返回 (最后一次 HTTP 状态, 最后一次响应, 轮询次数)。
+              timeout_total: int, no_poll: bool) -> tuple[int, dict, int, dict]:
+    """轮询查询任务状态，返回 (最后一次 HTTP 状态, 最后一次响应, 轮询次数, 首次响应)。
 
     no_poll=True 时只查询一次即返回；否则轮询直到终态或总超时。
     使用 time.monotonic 计时，不依赖 time.time/random。
+
+    首次响应单独返回：创建后的第一次查询天然处于进行中态（queued/running），
+    status_queued_or_running 据此校验，无需为「进行中态」单独建一个任务。
     """
     url = build_query_url(base_url, task_id)
     polls = 0
     deadline = time.monotonic() + timeout_total
     last_status, last_resp = 0, {}
+    first_resp: dict = {}
     while True:
         status, resp = send_request(url, api_key, "GET", None, timeout=60)
         polls += 1
         last_status, last_resp = status, resp
+        if polls == 1:
+            first_resp = resp
         if no_poll:
             break
         task_status = resp.get("status") if isinstance(resp, dict) else None
@@ -340,7 +346,7 @@ def poll_task(base_url: str, api_key: str, task_id: str, *, interval: int,
         if time.monotonic() >= deadline:
             break
         time.sleep(interval)
-    return last_status, last_resp, polls
+    return last_status, last_resp, polls, first_resp
 
 
 # ==================== 校验 ====================
@@ -348,17 +354,18 @@ def poll_task(base_url: str, api_key: str, task_id: str, *, interval: int,
 
 def run_checks(checks: list[str], schemas: dict, *, create_status: int,
                create_resp: dict, query_status: int, query_resp: dict,
-               polled: bool, expected_error_code: str | None = None) -> tuple[str, str, object, object]:
+               polled: bool, first_query_resp: dict | None = None,
+               expected_error_code: str | None = None) -> tuple[str, str, object, object]:
     """执行校验项，返回 (status, error, expected, actual)。
 
     任一 check 不通过即 fail，error 记录首个失败原因。
     expected/actual 反映任务最终状态，便于报告直观展示。
     """
     task_status = query_resp.get("status") if isinstance(query_resp, dict) else None
-    if "status_queued_or_running" in checks:
-        expected_display = "queued|running"
-        actual_display = task_status
-    elif "reached_succeeded" in checks:
+    # 进行中态取首次查询响应：轮询到终态的用例也能顺带校验 queued/running
+    first_resp = first_query_resp if first_query_resp is not None else query_resp
+    first_status = first_resp.get("status") if isinstance(first_resp, dict) else None
+    if "reached_succeeded" in checks:
         expected_display = "succeeded"
         actual_display = task_status
     else:
@@ -405,12 +412,14 @@ def run_checks(checks: list[str], schemas: dict, *, create_status: int,
                 return "fail", f"查询响应不符合 schema：{err}", None, None
 
         elif check == "status_queued_or_running":
-            if task_status not in {"queued", "running"}:
+            # 判首次查询响应而非最终响应：轮询到终态的用例也能校验进行中态，
+            # 无需为此单独创建一个任务。
+            if first_status not in {"queued", "running"}:
                 return (
                     "fail",
-                    f"首次查询 status 期望 queued 或 running，实际 {task_status}",
+                    f"首次查询 status 期望 queued 或 running，实际 {first_status}",
                     "queued|running",
-                    task_status,
+                    first_status,
                 )
 
         elif check == "reached_succeeded":
@@ -549,11 +558,11 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
     task_id = create_resp.get("id") if isinstance(create_resp, dict) else None
 
     # 创建失败（无 task_id）：直接对创建响应跑校验，不进入轮询
-    query_status, query_resp, polls = 0, {}, 0
+    query_status, query_resp, polls, first_query_resp = 0, {}, 0, {}
     polled = False
     if create_status == 200 and task_id:
         try:
-            query_status, query_resp, polls = poll_task(
+            query_status, query_resp, polls, first_query_resp = poll_task(
                 base_url, api_key, task_id,
                 interval=config["poll_interval"],
                 timeout_total=config["poll_timeout"],
@@ -575,6 +584,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
         checks, schemas,
         create_status=create_status, create_resp=create_resp,
         query_status=query_status, query_resp=query_resp, polled=polled,
+        first_query_resp=first_query_resp,
         expected_error_code=case.get("expected_error_code"),
     )
 
@@ -590,6 +600,7 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
             "task_id": task_id,
             "polls": polls,
             "task_status": query_resp.get("status") if isinstance(query_resp, dict) else None,
+            "first_task_status": first_query_resp.get("status") if isinstance(first_query_resp, dict) else None,
             "usage": query_resp.get("usage") if isinstance(query_resp, dict) else None,
             "checks": checks,
             "warn_checks": warn_checks,

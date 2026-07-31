@@ -45,7 +45,7 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `create_error_status` | 创建任务返回 4xx（负向用例） |
 | `error_schema` | 错误响应通过 `error_response.schema.json` |
 | `error_code_matches` | `error.code` 精确等于 case 声明的 `expected_error_code`（负向用例） |
-| `status_queued_or_running` | 首次查询 `status` 为 `queued` 或 `running`（进行中态） |
+| `status_queued_or_running` | 首次查询 `status` 为 `queued` 或 `running`（进行中态）；判的是创建后第一次查询的响应，故可与 `reached_succeeded` 同时声明，无需为进行中态单独建任务 |
 
 计费字段（`usage`）不写死数值，仅由 schema 约束类型与 `minimum: 1`。
 
@@ -72,9 +72,13 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 
 基础文生视频用例（`t2v_basic`）请求 `resolution: 4k` 并轮询到 `succeeded`，校验成功态结构（必有 `content.video_url` 与 `usage`）——`4k`（3840×2160、10bit 位深）仅 **Seedance 2.0**（本套件默认模型 `doubao-seedance-2-0-260128`）支持，用于验证被测服务接受并能完成 4k 视频生成任务；不支持 4k 的实现会在创建时报错或轮询不到 `succeeded`。
 
-文生视频全流程用例（`t2v_full`）复用其已生成的视频，额外做两项**软校验（警告级，不影响 pass/fail）**：任务 id 与视频链接是否为**火山原生格式**（`id_volc_format` + `video_url_is_volc`）——id 形如 `cgt-20260420145835-68j7n`，`content.video_url` 的 host 以 `volces.com` 结尾。不满足只在报告里记一条警告（提示自行生成非火山格式 ID 或把视频转存到自有 CDN），不判失败；挂在已有用例上，不新增视频生成、零额外耗时。详见下文[软校验](#软校验warn_checks)。
+文生视频主用例（`t2v_full`，720p）用**一次视频生成**承载全部可复用的文生校验，避免重复出片：
 
-外加一个尾帧透传用例：文生视频开启 `return_last_frame: true`，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现）。
+- **进行中态**（`status_queued_or_running`）：判**首次轮询响应**——创建后第一次查询天然处于 `queued` / `running`，因此不必为「进行中态」单独建任务。
+- **尾帧透传**（`return_last_frame: true` + `succeeded_has_last_frame`）：尾帧只是个请求参数，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现），挂在本用例上不额外生成视频。
+- **火山原生格式软校验**（`id_volc_format` + `video_url_is_volc`）：复用已生成的视频，提示任务 id 形如 `cgt-20260420145835-68j7n`、`content.video_url` 的 host 以 `volces.com` 结尾。不满足只记警告（提示自行生成非火山格式 ID 或把视频转存到自有 CDN），不判失败。详见下文[软校验](#软校验warn_checks)。
+
+> 4k 用例（`t2v_basic`）独立保留而不与主用例合并：4k 仅 Seedance 2.0 支持，若把它当作唯一的文生基线，不支持 4k 的被测实现会连带丢失全部文生视频覆盖。
 
 外加一个多图参考正向用例：参考图传两个**火山官方公开素材**的 `asset://` 引用（`asset-20260224190652-n8sd2` 洛丽塔连衣裙、`asset-20260401123823-6d4x2` 中国 26 岁女性网红），prompt 让「图2的女生穿上图1的裙子」，多图参考合成并轮询到成功。与下方无效素材负向用例互为正反面，验证兼容火山方舟的实现能正确解析有效 `asset://` 引用并生成视频。
 
@@ -86,9 +90,6 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 
 > `prompt` / `first_frame_url` / `last_frame_url` 等素材字段支持在单个 case 中覆盖全局配置，
 > 负向用例可声明 `expected_error_code` 供 `error_code_matches` 校验精确错误码。
-
-另有一个「创建后立即查询」用例（`t2v_immediate_query`）：创建任务后只查询一次，
-校验 queued/running 态响应结构是否符合火山格式（`poll: once`，无需等待视频生成完成）。
 
 单个 case 可通过 `poll: once` 声明仅查询一次（不轮询到终态），与全局 `--no-poll` 等效但只作用于该 case。
 
@@ -142,7 +143,7 @@ python run_tests.py --model your-model-name
 python run_tests.py --no-poll
 ```
 
-也可在单个 case 上声明 `poll: once`（见 `t2v_immediate_query`），与其它需轮询到终态的 case 混跑。
+也可在单个 case 上声明 `poll: once`，与其它需轮询到终态的 case 混跑。
 
 不打真实接口、仅自测「请求体构造与 schema 加载」（无需配置地址和密钥）：
 
@@ -165,6 +166,7 @@ python run_tests.py --dry-run
 - `scenario` / `model`：场景与被测模型
 - `create_url` / `create_body`：创建任务的请求 URL 与请求体
 - `task_id` / `polls` / `task_status`：任务 ID、轮询次数、最终任务状态
+- `first_task_status`：首次查询到的任务状态（`status_queued_or_running` 据此校验）
 - `create_response` / `query_response`：完整响应体（超长字符串已截断，仅保留前 500 字符）
 - `usage`：计费返回
 

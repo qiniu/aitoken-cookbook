@@ -24,7 +24,9 @@
 #   create_error_status             创建任务返回 4xx（负向用例）
 #   error_schema                    错误响应通过 error_response.schema.json（{error:{code,message,...}}）
 #   error_code_matches              error.code 精确等于 case 声明的 expected_error_code（负向用例）
-#   status_queued_or_running        首次查询 status 为 queued 或 running（进行中态）
+#   status_queued_or_running        首次查询 status 为 queued 或 running（进行中态）；
+#                                   判的是创建后第一次查询的响应，故可与 reached_succeeded
+#                                   同时声明，无需为进行中态单独建任务
 #
 # 可用的 warn_checks（软校验，警告级，不影响 pass/fail，仅提示）：
 #   id_volc_format                  创建与查询响应的 id 均为火山格式（cgt-14位时间戳-随机串，如 cgt-20260420145835-68j7n）
@@ -79,28 +81,24 @@ cases:
       - succeeded_schema
       - usage_total_equals_completion
 
-  - id: t2v_immediate_query
-    name: 文生视频 创建后立即查询（queued 态响应结构）
+  # 文生视频主用例：一次视频生成承载全部可复用的文生校验，避免重复出片。
+  #   status_queued_or_running  判首次轮询响应（创建后第一次查询天然是进行中态）
+  #   return_last_frame:true    尾帧透传只是请求参数，挂在本用例上不额外生成视频
+  #   warn_checks               复用已生成的视频做火山原生格式软校验
+  - id: t2v_full
+    name: 文生视频 全流程（进行中态 + 轮询到成功 + 计费字段 + 尾帧透传 + 火山原生格式）
     scenario: text_to_video
-    poll: once
+    return_last_frame: true
     checks:
       - create_status_200
       - create_schema
       - query_status_200
       - query_schema
       - status_queued_or_running
-
-  - id: t2v_full
-    name: 文生视频 全流程（轮询到成功 + 计费字段 + 火山原生格式）
-    scenario: text_to_video
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
       - reached_succeeded
       - succeeded_schema
       - usage_total_equals_completion
+      - succeeded_has_last_frame
     # 软校验（警告级，不影响 pass/fail）：复用本用例已生成的视频，额外提示任务 id
     # 与视频链接是否为火山原生格式；不新增视频生成，零额外耗时。
     warn_checks:
@@ -147,23 +145,6 @@ cases:
       - reached_succeeded
       - succeeded_schema
       - usage_total_equals_completion
-
-  # ---------- 尾帧透传：return_last_frame ----------
-  # 开启 return_last_frame:true 后，成功响应应在 content.last_frame_url 返回视频尾帧图。
-  # 兼容火山方舟协议的实现会返回该字段；若成功响应仅含 video_url 而缺 last_frame_url，
-  # 此用例会失败，可用于识别不支持 return_last_frame 透传的被测实现。
-  - id: t2v_return_last_frame
-    name: 文生视频 返回尾帧（return_last_frame:true，成功响应含 content.last_frame_url）
-    scenario: text_to_video
-    return_last_frame: true
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - succeeded_has_last_frame
 
   # ---------- 负向用例：错误响应格式 ----------
   - id: invalid_model_error
