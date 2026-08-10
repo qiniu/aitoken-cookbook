@@ -49,6 +49,7 @@ SCHEMA_DIR = HERE / "schemas"
 
 # 复用公共报告模块
 sys.path.insert(0, str(SHARED))
+from http_common import USER_AGENT  # noqa: E402
 from report import CaseResult, Report, mask_secret  # noqa: E402
 from profiles import (  # noqa: E402
     SeedanceProfile,
@@ -386,6 +387,7 @@ def send_request(url: str, api_key: str, method: str, body: dict | None,
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {api_key}",
+            "User-Agent": USER_AGENT,
         },
         method=method,
     )

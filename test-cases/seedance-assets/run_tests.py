@@ -51,6 +51,7 @@ SCHEMA_DIR = HERE / "schemas"
 # 复用公共报告模块与同目录签名模块
 sys.path.insert(0, str(SHARED))
 sys.path.insert(0, str(HERE))
+from http_common import USER_AGENT  # noqa: E402
 from report import CaseResult, Report, mask_secret  # noqa: E402
 import volc_sign  # noqa: E402
 
@@ -221,6 +222,8 @@ def send_signed_request(base_url: str, action: str, body: dict, *,
         raw_query=parsed.query,
         body=body_bytes,
     )
+    # UA 不在 volc_sign.SIGNED_HEADERS 内，签名算完再追加不影响验签
+    headers["User-Agent"] = USER_AGENT
 
     req = urllib.request.Request(url, data=body_bytes, headers=headers, method="POST")
     try:

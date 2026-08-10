@@ -42,6 +42,7 @@ SHARED = HERE.parent / "_shared"
 
 # 复用公共报告模块
 sys.path.insert(0, str(SHARED))
+from http_common import USER_AGENT  # noqa: E402
 from report import CaseResult, Report, mask_secret  # noqa: E402
 
 # 默认配置（base_url 无默认，必须通过 API_BASE_URL 指定）
@@ -116,7 +117,8 @@ def extract_image_bytes(resp: dict, timeout: int) -> bytes:
     url = first.get("url")
     if url:
         try:
-            with urllib.request.urlopen(url, timeout=timeout) as fp:
+            req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+            with urllib.request.urlopen(req, timeout=timeout) as fp:
                 return fp.read()
         except Exception as exc:  # noqa: BLE001
             raise ValueError(f"下载图片 url 失败：{exc!r}") from exc
@@ -229,6 +231,7 @@ def send_request(url: str, api_key: str, data: bytes, content_type: str,
         headers={
             "Content-Type": content_type,
             "Authorization": f"Bearer {api_key}",
+            "User-Agent": USER_AGENT,
         },
         method="POST",
     )
