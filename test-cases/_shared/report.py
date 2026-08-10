@@ -20,8 +20,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-# 允许的 case 状态：通过 / 断言失败 / 执行报错
-Status = str  # "pass" | "fail" | "error"
+# 允许的 case 状态：通过 / 断言失败 / 执行报错 / 条件不适用
+Status = str  # "pass" | "fail" | "error" | "skipped"
 
 # details 中按 key 后缀识别媒体类型，用于 HTML 预览
 _IMAGE_KEY_HINTS = ("image_url", "image", "img_url")
@@ -63,7 +63,7 @@ class CaseResult:
 
 
 # 状态对应的展示符号
-_STATUS_ICON = {"pass": "✓", "fail": "✗", "error": "!"}
+_STATUS_ICON = {"pass": "✓", "fail": "✗", "error": "!", "skipped": "○"}
 # 通过但带软校验警告时的图标：用警告符号替代对勾，一眼可辨
 _WARN_ICON = "⚠"
 
@@ -113,12 +113,14 @@ class Report:
         passed = sum(1 for c in self.cases if c.status == "pass")
         failed = sum(1 for c in self.cases if c.status == "fail")
         errored = sum(1 for c in self.cases if c.status == "error")
+        skipped = sum(1 for c in self.cases if c.status == "skipped")
         warned = sum(1 for c in self.cases if c.warnings)
         return {
             "total": len(self.cases),
             "passed": passed,
             "failed": failed,
             "errored": errored,
+            "skipped": skipped,
             "warned": warned,
             "duration_ms": sum(c.duration_ms for c in self.cases),
         }
@@ -151,7 +153,8 @@ class Report:
             "",
             f"**结果**：{verdict}　|　"
             f"总数 {s['total']}　通过 {s['passed']}　失败 {s['failed']}　"
-            f"错误 {s['errored']}　警告 {s['warned']}　耗时 {s['duration_ms']}ms",
+            f"错误 {s['errored']}　跳过 {s['skipped']}　警告 {s['warned']}　"
+            f"耗时 {s['duration_ms']}ms",
             "",
         ]
         # 运行变量区块：记录本次测试用的环境变量
@@ -192,6 +195,7 @@ class Report:
             passed=s["passed"],
             failed=s["failed"],
             errored=s["errored"],
+            skipped=s["skipped"],
             warned=s["warned"],
             duration=s["duration_ms"],
             env=self._env_html(),
@@ -306,8 +310,10 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
   th {{ background: #f6f8fa; }}
   tr.pass .status {{ color: #1a7f37; font-weight: 700; }}
   tr.fail .status, tr.error .status {{ color: #cf222e; font-weight: 700; }}
+  tr.skipped .status {{ color: #656d76; font-weight: 700; }}
   tr.fail {{ background: #fff5f5; }}
   tr.error {{ background: #fff8f0; }}
+  tr.skipped {{ background: #f6f8fa; color: #656d76; }}
   tr.pass.warned {{ background: #fffbe6; }}
   tr.pass.warned .status {{ color: #9a6700; }}
   .err {{ color: #cf222e; }}
@@ -327,7 +333,7 @@ _HTML_TEMPLATE = """<!DOCTYPE html>
 <h1>测试报告：{model}</h1>
 <div class="meta">
   <span class="verdict {verdict_class}">{verdict_text}</span>
-  &nbsp; 总数 {total} · 通过 {passed} · 失败 {failed} · 错误 {errored} · 警告 {warned} · 耗时 {duration}ms
+  &nbsp; 总数 {total} · 通过 {passed} · 失败 {failed} · 错误 {errored} · 跳过 {skipped} · 警告 {warned} · 耗时 {duration}ms
 </div>
 {env}
 <h2>用例结果</h2>
