@@ -1,0 +1,54 @@
+# Seedance 模型能力档案。能力值以火山方舟官方文档为准。
+profiles:
+  seedance-2.5:
+    resolutions: [480p, 720p]
+    output_formats: [mp4, mov]
+    max_duration: 30
+    audio_only_reference: true
+    max_reference_images: 30
+    max_reference_videos: 10
+    max_reference_audios: 10
+    max_total_reference_assets: 50
+    scenario_overrides:
+      image_to_video:
+        ratio: adaptive
+      start_end_to_video:
+        ratio: adaptive
+      video_edit:
+        ratio: adaptive
+        duration: -1
+      video_extend:
+        ratio: adaptive
+
+  seedance-2.0:
+    resolutions: [480p, 720p, 1080p, 4k]
+    output_formats: [mp4]
+    max_duration: 15
+    audio_only_reference: false
+    max_reference_images: 9
+    max_reference_videos: 3
+    max_reference_audios: 3
+    max_total_reference_assets: 15
+    scenario_overrides: {}
+
+  seedance-2.0-fast:
+    resolutions: [480p, 720p]
+    output_formats: [mp4]
+    max_duration: 15
+    audio_only_reference: false
+    max_reference_images: 9
+    max_reference_videos: 3
+    max_reference_audios: 3
+    max_total_reference_assets: 15
+    scenario_overrides: {}
+
+  seedance-2.0-mini:
+    resolutions: [480p, 720p]
+    output_formats: [mp4]
+    max_duration: 15
+    audio_only_reference: false
+    max_reference_images: 9
+    max_reference_videos: 3
+    max_reference_audios: 3
+    max_total_reference_assets: 15
+    scenario_overrides: {}
