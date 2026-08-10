@@ -143,14 +143,40 @@ HTTP 请求使用标准库 `urllib`，无需安装 requests。相比 gpt-image-2
 
 ## 运行
 
-把地址指向被测服务，填入密钥，然后运行：
+进入 Seedance 测试目录，把地址和密钥指向被测服务：
 
 ```bash
-export API_BASE_URL="https://your-domain.com/api/v3"   # 被测接口地址
-export API_KEY="your-api-key"                          # 被测接口密钥
-export SEEDANCE_MODEL="doubao-seedance-2-0-260128"     # 被测模型 id（也可用 --model 覆盖）
-python run_tests.py --profile seedance-2.0
+cd test-cases/seedance
+export API_BASE_URL="https://your-domain.com/api/v3"
+export API_KEY="your-api-key"
 ```
+
+执行命令需要明确指定能力档案 `--profile`。`--model` 是实际写入请求体的模型标识，可传官方 Model ID、Endpoint ID 或自定义模型别名：
+
+```bash
+python run_tests.py \
+  --model doubao-seedance-2-5-xxxxxx \
+  --profile seedance-2.5
+```
+
+两者互相独立，程序不会根据 `--model` 字符串推断能力。使用 Endpoint ID 或自定义别名时同样显式声明 profile：
+
+```bash
+python run_tests.py \
+  --model ep-custom-seedance-prod \
+  --profile seedance-2.5
+```
+
+可用 profile：
+
+| 被测模型 | 参数 |
+|------|------|
+| Seedance 2.5 | `--profile seedance-2.5` |
+| Seedance 2.0 标准版 | `--profile seedance-2.0` |
+| Seedance 2.0 Fast | `--profile seedance-2.0-fast` |
+| Seedance 2.0 Mini | `--profile seedance-2.0-mini` |
+
+能力用例默认全部参与本次测试：profile 支持的用例会执行，不支持的用例自动记为 `skipped`，无需额外开启扩展测试参数。
 
 所有 case 默认**并发**执行（视频生成较慢，串行会很耗时），各 case 内部独立轮询，
 报告顺序仍与 `cases.yaml` 定义一致。
@@ -161,18 +187,22 @@ python run_tests.py --profile seedance-2.0
 |------|--------|------|
 | `API_BASE_URL` | 无（必填） | 被测接口的基础地址 |
 | `API_KEY` | 无（必填） | 被测接口的鉴权密钥 |
-| `SEEDANCE_MODEL` | `doubao-seedance-2-0-260128` | 被测模型 id（也可用 `--model` 覆盖） |
+| `SEEDANCE_MODEL` | `doubao-seedance-2-0-260128` | 被测模型标识（Model ID、Endpoint ID 或自定义别名；`--model` 优先） |
 
-被测模型标识可自定义，命令行参数优先于环境变量。以下示例使用 Endpoint ID / 自定义别名，并显式指定其真实能力档案：
+也可以用环境变量设置模型标识；`--profile` 仍必须通过命令行传入：
 
 ```bash
-python run_tests.py --model ep-custom-seedance-prod --profile seedance-2.5
+export SEEDANCE_MODEL="ep-custom-seedance-prod"
+python run_tests.py --profile seedance-2.5
 ```
 
 仅创建 + 单次查询、不等待终态（快速冒烟，省时省钱；此时不要让 case 声明 `reached_succeeded`）：
 
 ```bash
-python run_tests.py --profile seedance-2.0-mini --no-poll
+python run_tests.py \
+  --model ep-custom-seedance-prod \
+  --profile seedance-2.0-mini \
+  --no-poll
 ```
 
 也可在单个 case 上声明 `poll: once`，与其它需轮询到终态的 case 混跑。
@@ -180,7 +210,10 @@ python run_tests.py --profile seedance-2.0-mini --no-poll
 不打真实接口、仅自测「请求体构造与 schema 加载」（无需配置地址和密钥）：
 
 ```bash
-python run_tests.py --profile seedance-2.5 --dry-run
+python run_tests.py \
+  --model ep-custom-seedance-prod \
+  --profile seedance-2.5 \
+  --dry-run
 ```
 
 轮询间隔与超时在 `cases.yaml` 顶部配置（`poll_interval` / `poll_timeout`，单位秒）。

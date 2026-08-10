@@ -81,6 +81,15 @@ cd test-cases/<model-name>
 python run_tests.py
 ```
 
+Seedance 需要额外声明模型能力档案；实际模型标识可为 Model ID、Endpoint ID 或自定义别名：
+
+```bash
+cd test-cases/seedance
+python run_tests.py --model ep-custom-seedance-prod --profile seedance-2.5
+```
+
+具体 profile 取值与使用方式见 [Seedance 测试说明](seedance/README.md#运行)。
+
 运行完成后，结果会输出到 `reports/` 目录，每次运行同时产出三种格式（见下文）。
 
 ## 结果格式
