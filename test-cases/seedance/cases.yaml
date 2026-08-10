@@ -9,8 +9,14 @@
 # scenario 取值（决定 content[] 结构）：
 #   text_to_video         文生视频：content=[text]
 #   image_to_video        图生视频-首帧：content=[text, image_url(first_frame)]
+#   reference_to_video    参考生视频：content=[text, image_url(reference_image), ...]
 #   start_end_to_video    首尾帧生视频：content=[text, image_url(first_frame), image_url(last_frame)]
 #   multimodal_reference  多模态参考生视频：content=[text, reference_image, reference_video, reference_audio]
+#   audio_only_reference  纯音频参考：content=[text, reference_audio]
+#   video_edit            视频编辑：content=[text, reference_video]
+#   video_extend          视频延长：content=[text, reference_video]
+#   reference_images_profile_max       按 profile 生成 9/30 个参考图片项
+#   multimodal_reference_6_videos      1 图 + 6 视频参考
 #
 # 可用的 checks（含义见 run_tests.py）：
 #   create_status_200               创建任务 HTTP 200
@@ -27,6 +33,9 @@
 #   status_queued_or_running        首次查询 status 为 queued 或 running（进行中态）；
 #                                   判的是创建后第一次查询的响应，故可与 reached_succeeded
 #                                   同时声明，无需为进行中态单独建任务
+#   query_resolution_matches_request 查询响应 resolution 与请求一致
+#   query_duration_matches_request   查询响应 duration 与请求一致
+#   succeeded_video_format_matches_request 生成视频容器与 output_format 一致
 #
 # 可用的 warn_checks（软校验，警告级，不影响 pass/fail，仅提示）：
 #   id_volc_format                  创建与查询响应的 id 均为火山格式（cgt-14位时间戳-随机串，如 cgt-20260420145835-68j7n）
@@ -34,7 +43,7 @@
 #
 # 单个 case 可用字段覆盖全局：model / prompt / resolution / ratio / duration /
 # first_frame_url / last_frame_url / reference_*_url，以及可选开关
-# seed / camera_fixed / watermark / generate_audio / return_last_frame；
+# seed / camera_fixed / watermark / generate_audio / return_last_frame / output_format；
 # 负向用例可声明 expected_error_code 供 error_code_matches 校验。
 # warn_checks: [...]  软校验，不满足只记警告、不判 fail（用于「火山原生格式」这类兼容性提示）。
 # poll: once  仅创建后查询一次，不轮询到终态（与全局 --no-poll 等效，但只作用于该 case）。
@@ -55,7 +64,7 @@ reference_audio_url: "https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2
 
 # 默认生成参数（拼到创建请求体顶层；留空则不发送，由服务取默认值）
 resolution: "720p"
-ratio: "16:9"
+ratio: adaptive
 duration: 5
 
 # 轮询配置
@@ -64,13 +73,12 @@ poll_timeout: 1200    # 单个任务轮询总超时（秒）；首尾帧/多模�
 
 cases:
   # ---------- 文生视频 ----------
-  # 4k 分辨率仅 Seedance 2.0（本套件默认模型 doubao-seedance-2-0-260128）支持，输出 3840×2160、
-  # 10bit 位深；480p/720p/1080p 为通用档位。本用例请求 resolution:4k 并轮询到 succeeded，
-  # 校验成功态结构（必有 content.video_url 与 usage），用于验证被测服务接受并能完成 4k 视频生成任务；
-  # 不支持 4k 的实现会在创建时报错或轮询不到 succeeded。
-  - id: t2v_basic
+  # 仅声明支持 4k 的 profile 执行；其他 profile 记录为 skipped。
+  - id: t2v_4k
     name: 文生视频 4k 分辨率（轮询到成功出片）
     scenario: text_to_video
+    requires:
+      resolution: 4k
     resolution: "4k"
     checks:
       - create_status_200
@@ -80,6 +88,40 @@ cases:
       - reached_succeeded
       - succeeded_schema
       - usage_total_equals_completion
+      - query_resolution_matches_request
+
+  # Seedance 2.5 最长支持 30 秒；2.0 系列自动跳过。
+  - id: t2v_30s
+    name: 文生视频 30 秒（轮询到成功且查询时长一致）
+    scenario: text_to_video
+    requires:
+      min_max_duration: 30
+    duration: 30
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+      - query_duration_matches_request
+
+  # 查询接口不返回 output_format，因此成功后读取视频文件头验证 QuickTime MOV 容器。
+  - id: t2v_output_mov
+    name: 文生视频 MOV 输出（验证 QuickTime 容器）
+    scenario: text_to_video
+    requires:
+      output_format: mov
+    output_format: mov
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - succeeded_video_format_matches_request
 
   # 文生视频主用例：一次视频生成承载全部可复用的文生校验，避免重复出片。
   #   status_queued_or_running  判首次轮询响应（创建后第一次查询天然是进行中态）
@@ -137,6 +179,90 @@ cases:
     scenario: multimodal_reference
     # 多模态参考有声视频建议开启音频生成
     generate_audio: true
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- Seedance 2.5 能力：纯音频参考 ----------
+  - id: audio_only_reference
+    name: 纯音频参考生视频（文本 + 官方音频 URL）
+    scenario: audio_only_reference
+    requires:
+      audio_only_reference: true
+    reference_audio_url: "https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3"
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- Profile 图片参考上限：2.5 为 30，2.0 系列为 9 ----------
+  - id: reference_images_profile_max
+    name: 按 profile 上限提交参考图片（9/30 项）
+    scenario: reference_images_profile_max
+    prompt: "依次参考图像1至最后一张图像的产品外观、构图和光影，生成连贯的视频"
+    reference_image_url: "https://arkdocs.tos-cn-beijing.volces.com/images/video-generation/seedance2.5_reference1.png"
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- Seedance 2.5 官方示例：1 图 + 6 视频 ----------
+  - id: multimodal_reference_6_videos
+    name: 多模态参考生视频（官方 1 图 + 6 视频，总时长约 28.14 秒）
+    scenario: multimodal_reference_6_videos
+    requires:
+      min_max_reference_videos: 6
+    prompt: "参考图片中的主体和六段视频的镜头语言，生成一段连贯的产品展示视频"
+    reference_image_url: "https://arkdocs.tos-cn-beijing.volces.com/images/video-generation/seedance2.5_reference1.png"
+    reference_video_urls:
+      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference2.mp4"
+      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference3.mp4"
+      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference4.mp4"
+      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference5.mp4"
+      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference6.mp4"
+      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference7.mp4"
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  # ---------- 视频编辑 / 延长（所有 profile） ----------
+  - id: video_edit
+    name: 视频编辑（profile 自动应用合法 ratio/duration）
+    scenario: video_edit
+    prompt: "将参考视频中的主体替换为银色机器人，保持原有镜头运动和节奏"
+    reference_video_url: "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_edit_input.mov"
+    checks:
+      - create_status_200
+      - create_schema
+      - query_status_200
+      - query_schema
+      - reached_succeeded
+      - succeeded_schema
+      - usage_total_equals_completion
+
+  - id: video_extend
+    name: 视频延长（profile 自动应用合法 ratio）
+    scenario: video_extend
+    prompt: "自然延长参考视频，保持场景、主体动作和镜头运动连续"
+    reference_video_url: "https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_extend_video1.mp4"
     checks:
       - create_status_200
       - create_schema

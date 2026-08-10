@@ -20,9 +20,13 @@ JSON Schema（draft 2020-12）校验，跨字段与流程语义保留为少量�
 所有 case 默认并发执行（视频生成较慢，串行会很耗时），各 case 内部独立轮询。
 
 用法：
-  python run_tests.py            # 并发请求接口，轮询到终态
-  python run_tests.py --no-poll  # 仅创建 + 单次查询，快速冒烟（不等待终态）
-  python run_tests.py --dry-run  # 跳过真实请求，仅自测请求体构造与 schema 加载
+  python run_tests.py --profile seedance-2.0
+  python run_tests.py --profile seedance-2.5 --model ep-custom
+  python run_tests.py --profile seedance-2.0-mini --no-poll
+  python run_tests.py --profile seedance-2.5 --dry-run
+
+--model 只决定请求体中的模型标识，可传 Model ID、Endpoint ID 或自定义别名；
+必填的 --profile 独立声明其能力，用于选择合法用例和请求参数。
 """
 
 from __future__ import annotations
@@ -46,6 +50,12 @@ SCHEMA_DIR = HERE / "schemas"
 # 复用公共报告模块
 sys.path.insert(0, str(SHARED))
 from report import CaseResult, Report, mask_secret  # noqa: E402
+from profiles import (  # noqa: E402
+    SeedanceProfile,
+    apply_profile_overrides,
+    load_profiles,
+    unmet_requirement,
+)
 
 # 默认配置（base_url 无默认，必须通过 API_BASE_URL 指定）
 DEFAULT_MODEL = "doubao-seedance-2-0-260128"
@@ -174,7 +184,32 @@ def load_cases() -> tuple[dict, list[dict]]:
     return config, data.get("cases", [])
 
 
-def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[dict]:
+def _validate_reference_limits(content: list[dict], profile: SeedanceProfile) -> None:
+    """在发请求前校验参考素材数量没有超过 profile 上限。"""
+    image_count = sum(1 for item in content if item.get("role") == "reference_image")
+    video_count = sum(1 for item in content if item.get("role") == "reference_video")
+    audio_count = sum(1 for item in content if item.get("role") == "reference_audio")
+    limits = (
+        ("参考图片", image_count, profile.max_reference_images),
+        ("参考视频", video_count, profile.max_reference_videos),
+        ("参考音频", audio_count, profile.max_reference_audios),
+    )
+    for label, actual, limit in limits:
+        if actual > limit:
+            raise ValueError(f"{label}数量 {actual} 超过 profile 上限 {limit}")
+    total = image_count + video_count + audio_count
+    if total > profile.max_total_reference_assets:
+        raise ValueError(
+            f"参考素材总数 {total} 超过 profile 上限 {profile.max_total_reference_assets}"
+        )
+
+
+def build_content(
+    scenario: str,
+    cfg: dict,
+    case: dict | None,
+    profile: SeedanceProfile,
+) -> list[dict]:
     """按场景拼 content[] 数组（type/role 符合火山方舟格式）。
 
     prompt / first_frame_url / last_frame_url 支持 case 级覆盖：case 显式声明时
@@ -190,15 +225,15 @@ def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[di
     text_item = {"type": "text", "text": prompt}
 
     if scenario == "text_to_video":
-        return [text_item]
+        content = [text_item]
 
-    if scenario == "image_to_video":
-        return [
+    elif scenario == "image_to_video":
+        content = [
             text_item,
             {"type": "image_url", "image_url": {"url": pick("first_frame_url")}, "role": "first_frame"},
         ]
 
-    if scenario == "reference_to_video":
+    elif scenario == "reference_to_video":
         # 参考图生视频：content=[text, reference_image, ...]。
         # case 声明 reference_image_urls（列表）时按多图参考展开，每个 URL 一个
         # role=reference_image 项（Seedance 2.0 多图参考用法）；未声明时回退到
@@ -206,7 +241,7 @@ def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[di
         ref_urls = case.get("reference_image_urls")
         if not ref_urls:
             ref_urls = [pick("reference_image_url")]
-        return [
+        content = [
             text_item,
             *[
                 {"type": "image_url", "image_url": {"url": url}, "role": "reference_image"}
@@ -214,22 +249,59 @@ def build_content(scenario: str, cfg: dict, case: dict | None = None) -> list[di
             ],
         ]
 
-    if scenario == "start_end_to_video":
-        return [
+    elif scenario == "start_end_to_video":
+        content = [
             text_item,
             {"type": "image_url", "image_url": {"url": pick("first_frame_url")}, "role": "first_frame"},
             {"type": "image_url", "image_url": {"url": pick("last_frame_url")}, "role": "last_frame"},
         ]
 
-    if scenario == "multimodal_reference":
-        return [
+    elif scenario == "multimodal_reference":
+        content = [
             text_item,
             {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
             {"type": "video_url", "video_url": {"url": pick("reference_video_url")}, "role": "reference_video"},
             {"type": "audio_url", "audio_url": {"url": pick("reference_audio_url")}, "role": "reference_audio"},
         ]
 
-    raise ValueError(f"未知 scenario：{scenario}")
+    elif scenario == "audio_only_reference":
+        content = [
+            text_item,
+            {"type": "audio_url", "audio_url": {"url": pick("reference_audio_url")}, "role": "reference_audio"},
+        ]
+
+    elif scenario in {"video_edit", "video_extend"}:
+        content = [
+            text_item,
+            {"type": "video_url", "video_url": {"url": pick("reference_video_url")}, "role": "reference_video"},
+        ]
+
+    elif scenario == "reference_images_profile_max":
+        url = pick("reference_image_url")
+        content = [
+            text_item,
+            *[
+                {"type": "image_url", "image_url": {"url": url}, "role": "reference_image"}
+                for _ in range(profile.max_reference_images)
+            ],
+        ]
+
+    elif scenario == "multimodal_reference_6_videos":
+        video_urls = case.get("reference_video_urls") or []
+        content = [
+            text_item,
+            {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
+            *[
+                {"type": "video_url", "video_url": {"url": url}, "role": "reference_video"}
+                for url in video_urls
+            ],
+        ]
+
+    else:
+        raise ValueError(f"未知 scenario：{scenario}")
+
+    _validate_reference_limits(content, profile)
+    return content
 
 
 def build_create_body(model: str, content: list[dict], cfg: dict, case: dict) -> dict:
@@ -248,7 +320,14 @@ def build_create_body(model: str, content: list[dict], cfg: dict, case: dict) ->
         body["duration"] = duration
 
     # 其余可选开关（仅在 case 显式声明时发送）
-    for key in ("seed", "camera_fixed", "watermark", "generate_audio", "return_last_frame"):
+    for key in (
+        "seed",
+        "camera_fixed",
+        "watermark",
+        "generate_audio",
+        "return_last_frame",
+        "output_format",
+    ):
         if key in case:
             body[key] = case[key]
 
@@ -352,15 +431,41 @@ def poll_task(base_url: str, api_key: str, task_id: str, *, interval: int,
 # ==================== 校验 ====================
 
 
+def is_quicktime_mov_header(data: bytes) -> bool:
+    """文件头是否包含 major brand 为 ``qt  `` 的 ISO BMFF ftyp box。"""
+    offset = data.find(b"ftyp")
+    return offset >= 0 and data[offset + 4:offset + 8] == b"qt  "
+
+
+def probe_mov_url(url: str, timeout: int = 60) -> tuple[bool, dict[str, object]]:
+    """只读取视频 URL 的前 256 字节并判断是否为 QuickTime MOV 容器。"""
+    request = urllib.request.Request(url, headers={"Range": "bytes=0-255"})
+    metadata: dict[str, object] = {"url": url}
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            prefix = response.read(256)
+            metadata.update({
+                "content_type": response.headers.get("Content-Type", ""),
+                "bytes_read": len(prefix),
+                "prefix_hex": prefix[:32].hex(),
+            })
+    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+        metadata["error"] = repr(exc)
+        return False, metadata
+    return is_quicktime_mov_header(prefix), metadata
+
+
 def run_checks(checks: list[str], schemas: dict, *, create_status: int,
                create_resp: dict, query_status: int, query_resp: dict,
                polled: bool, first_query_resp: dict | None = None,
+               create_body: dict | None = None,
                expected_error_code: str | None = None) -> tuple[str, str, object, object]:
     """执行校验项，返回 (status, error, expected, actual)。
 
     任一 check 不通过即 fail，error 记录首个失败原因。
     expected/actual 反映任务最终状态，便于报告直观展示。
     """
+    create_body = create_body or {}
     task_status = query_resp.get("status") if isinstance(query_resp, dict) else None
     # 进行中态取首次查询响应：轮询到终态的用例也能顺带校验 queued/running
     first_resp = first_query_resp if first_query_resp is not None else query_resp
@@ -453,6 +558,54 @@ def run_checks(checks: list[str], schemas: dict, *, create_status: int,
                         "成功响应缺 content.last_frame_url（被测实现未透传 return_last_frame 或丢弃了尾帧字段）",
                         "content.last_frame_url", last_frame)
 
+        elif check == "query_resolution_matches_request":
+            expected_resolution = create_body.get("resolution")
+            actual_resolution = query_resp.get("resolution")
+            if actual_resolution != expected_resolution:
+                return (
+                    "fail",
+                    f"查询响应 resolution 期望 {expected_resolution}，实际 {actual_resolution}",
+                    expected_resolution,
+                    actual_resolution,
+                )
+
+        elif check == "query_duration_matches_request":
+            expected_duration = create_body.get("duration")
+            actual_duration = query_resp.get("duration")
+            if actual_duration != expected_duration:
+                return (
+                    "fail",
+                    f"查询响应 duration 期望 {expected_duration}，实际 {actual_duration}",
+                    expected_duration,
+                    actual_duration,
+                )
+
+        elif check == "succeeded_video_format_matches_request":
+            expected_format = create_body.get("output_format")
+            video_url = get_path(query_resp, "content.video_url")
+            if expected_format != "mov":
+                return (
+                    "fail",
+                    f"当前仅支持校验 output_format=mov，实际 {expected_format}",
+                    "mov",
+                    expected_format,
+                )
+            if not video_url:
+                return (
+                    "fail",
+                    "成功响应缺 content.video_url，无法验证 MOV 容器",
+                    "content.video_url",
+                    video_url,
+                )
+            matched, metadata = probe_mov_url(video_url)
+            if not matched:
+                return (
+                    "fail",
+                    f"生成视频不是 QuickTime MOV 容器或文件头读取失败：{metadata}",
+                    "ftyp major brand qt  ",
+                    metadata,
+                )
+
         else:
             return "fail", f"未知 check：{check}", None, None
 
@@ -498,25 +651,54 @@ def run_warn_checks(warn_checks: list[str], *, create_resp: dict, query_resp: di
 # ==================== 单个 case 执行 ====================
 
 
-def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: str,
-             api_key: str, dry_run: bool, no_poll: bool) -> CaseResult:
+def run_case(case: dict, *, schemas: dict, config: dict, profile: SeedanceProfile,
+             model: str, base_url: str, api_key: str, dry_run: bool,
+             no_poll: bool) -> CaseResult:
     """执行单个 case，返回 CaseResult。无共享可变状态，可安全并发调用。"""
     cid = case["id"]
     name = case.get("name", cid)
     scenario = case.get("scenario", "text_to_video")
-    checks = case.get("checks", [])
-    warn_checks = case.get("warn_checks", [])
     case_model = case.get("model", model)
-    case_no_poll = no_poll or case.get("poll") == "once"
 
-    base_details = {"scenario": scenario, "model": case_model}
+    base_details = {
+        "scenario": scenario,
+        "model": case_model,
+        "profile": profile.name,
+    }
     if case.get("poll"):
         base_details["poll"] = case["poll"]
 
+    try:
+        reason = unmet_requirement(case.get("requires", {}), profile)
+    except Exception as exc:  # noqa: BLE001
+        return CaseResult(
+            id=cid, name=name, status="error",
+            error=f"解析 profile 要求失败：{exc!r}", details=base_details,
+        )
+    if reason:
+        return CaseResult(
+            id=cid, name=name, status="skipped", duration_ms=0,
+            details={**base_details, "skip_reason": reason},
+        )
+
+    try:
+        effective_case = apply_profile_overrides(case, profile)
+    except Exception as exc:  # noqa: BLE001
+        return CaseResult(
+            id=cid, name=name, status="error",
+            error=f"应用 profile 覆盖失败：{exc!r}", details=base_details,
+        )
+
+    checks = effective_case.get("checks", [])
+    warn_checks = effective_case.get("warn_checks", [])
+    case_no_poll = no_poll or effective_case.get("poll") == "once"
+
     # 构造创建请求体
     try:
-        content = build_content(scenario, config, case)
-        create_body = build_create_body(case_model, content, config, case)
+        content = build_content(scenario, config, effective_case, profile)
+        create_body = build_create_body(
+            case_model, content, config, effective_case
+        )
     except Exception as exc:  # noqa: BLE001
         return CaseResult(
             id=cid, name=name, status="error",
@@ -585,7 +767,8 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
         create_status=create_status, create_resp=create_resp,
         query_status=query_status, query_resp=query_resp, polled=polled,
         first_query_resp=first_query_resp,
-        expected_error_code=case.get("expected_error_code"),
+        create_body=create_body,
+        expected_error_code=effective_case.get("expected_error_code"),
     )
 
     # 软校验：火山原生格式提示，不影响 verdict，仅累积为警告
@@ -614,7 +797,12 @@ def run_case(case: dict, *, schemas: dict, config: dict, model: str, base_url: s
 
 
 def main() -> int:
+    profiles = load_profiles()
     parser = argparse.ArgumentParser(description="运行 Seedance 视频生成测试用例")
+    parser.add_argument(
+        "--profile", required=True, choices=sorted(profiles),
+        help="模型能力档案；与 --model 独立，用于选择合法测试用例",
+    )
     parser.add_argument(
         "--dry-run", action="store_true",
         help="跳过真实请求，仅自测请求体构造与 schema 加载（无需 API Key）",
@@ -641,6 +829,7 @@ def main() -> int:
 
     base_url = os.environ.get("API_BASE_URL", "")
     model = args.model
+    profile = profiles[args.profile]
     api_key = os.environ.get("API_KEY", "")
 
     if not args.dry_run:
@@ -652,7 +841,8 @@ def main() -> int:
             return 1
 
     def work(case):
-        return run_case(case, schemas=schemas, config=config, model=model,
+        return run_case(case, schemas=schemas, config=config, profile=profile,
+                        model=model,
                         base_url=base_url, api_key=api_key,
                         dry_run=args.dry_run, no_poll=args.no_poll)
 
@@ -668,13 +858,15 @@ def main() -> int:
         "API_BASE_URL": base_url,
         "API_KEY": mask_secret(api_key),
         "SEEDANCE_MODEL": model,
+        "SEEDANCE_PROFILE": profile.name,
     }
     report = Report(model=model, cases=results, env=env)
     paths = report.write(args.out)
     s = report.summary()
     verdict = "PASS" if report.passed else "FAIL"
     print(f"{model}: {verdict}  total={s['total']} pass={s['passed']} "
-          f"fail={s['failed']} error={s['errored']} warn={s['warned']} ({s['duration_ms']}ms)")
+          f"fail={s['failed']} error={s['errored']} skip={s['skipped']} "
+          f"warn={s['warned']} ({s['duration_ms']}ms)")
     print("报告已写入：" + "、".join(str(p) for p in paths.values()))
     return 0 if report.passed else 1
 
