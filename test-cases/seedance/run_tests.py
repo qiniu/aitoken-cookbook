@@ -278,41 +278,28 @@ def build_content(
             {"type": "audio_url", "audio_url": {"url": pick("reference_audio_url")}, "role": "reference_audio"},
         ]
 
-    elif scenario in {"video_edit", "video_extend"}:
-        content = [
-            text_item,
-            {"type": "video_url", "video_url": {"url": pick("reference_video_url")}, "role": "reference_video"},
-        ]
-
     elif scenario == "reference_images_profile_max":
         url = pick("reference_image_url")
+        video_urls = case.get("reference_video_urls") or [pick("reference_video_url")]
         content = [
             text_item,
             *[
                 {"type": "image_url", "image_url": {"url": url}, "role": "reference_image"}
                 for _ in range(profile.max_reference_images)
             ],
-            {
-                "type": "video_url",
-                "video_url": {"url": pick("reference_video_url")},
-                "role": "reference_video",
-            },
+            *[
+                {
+                    "type": "video_url",
+                    "video_url": {"url": video_url},
+                    "role": "reference_video",
+                }
+                for video_url in video_urls
+            ],
             {
                 "type": "audio_url",
                 "audio_url": {"url": pick("reference_audio_url")},
                 "role": "reference_audio",
             },
-        ]
-
-    elif scenario == "multimodal_reference_6_videos":
-        video_urls = case.get("reference_video_urls") or []
-        content = [
-            text_item,
-            {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
-            *[
-                {"type": "video_url", "video_url": {"url": url}, "role": "reference_video"}
-                for url in video_urls
-            ],
         ]
 
     else:

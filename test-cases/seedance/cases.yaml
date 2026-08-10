@@ -13,10 +13,7 @@
 #   start_end_to_video    首尾帧生视频：content=[text, image_url(first_frame), image_url(last_frame)]
 #   multimodal_reference  多模态参考生视频：content=[text, reference_image, reference_video, reference_audio]
 #   audio_only_reference  纯音频参考：content=[text, reference_audio]
-#   video_edit            视频编辑：content=[text, reference_video]
-#   video_extend          视频延长：content=[text, reference_video]
-#   reference_images_profile_max       按 profile 生成 9/30 图 + 1 视频 + 1 音频
-#   multimodal_reference_6_videos      1 图 + 6 视频参考
+#   reference_images_profile_max       按 profile 生成 9/30 图 + 1/6 视频 + 1 音频
 #
 # 可用的 checks（含义见 run_tests.py）：
 #   create_status_200               创建任务 HTTP 200
@@ -130,7 +127,7 @@ cases:
 
   # ---------- 图生视频-首帧 ----------
   - id: i2v_first_frame
-    name: 图生视频-首帧 全流程（轮询到成功）
+    name: 图生视频-首帧 全流程（2.5 同时验证 duration=-1）
     scenario: image_to_video
     checks:
       - create_status_200
@@ -170,66 +167,22 @@ cases:
       - succeeded_schema
       - usage_total_equals_completion
 
-  # ---------- Profile 图片参考上限 + 多模态：图片 9/30 + 视频 1 + 音频 1 ----------
+  # ---------- Profile 图片参考上限 + 多模态：图片 9/30 + 视频 1/6 + 音频 1 ----------
   - id: reference_images_profile_max
-    name: 按 profile 图片上限提交多模态参考（9/30 图 + 1 视频 + 1 音频）
+    name: 按 profile 图片上限提交多模态参考（2.5 同时覆盖官方 6 视频）
     scenario: reference_images_profile_max
     prompt: "参考全部图片的产品外观、视频的镜头运动和音频节奏，生成连贯的视频"
     reference_image_url: "https://arkdocs.tos-cn-beijing.volces.com/images/video-generation/seedance2.5_reference1.png"
     generate_audio: true
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - usage_total_equals_completion
-
-  # ---------- Seedance 2.5 官方示例：1 图 + 6 视频 ----------
-  - id: multimodal_reference_6_videos
-    name: 多模态参考生视频（官方 1 图 + 6 视频，总时长约 28.14 秒）
-    scenario: multimodal_reference_6_videos
-    requires:
-      min_max_reference_videos: 6
-    prompt: "参考图片中的主体和六段视频的镜头语言，生成一段连贯的产品展示视频"
-    reference_image_url: "https://arkdocs.tos-cn-beijing.volces.com/images/video-generation/seedance2.5_reference1.png"
-    reference_video_urls:
-      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference2.mp4"
-      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference3.mp4"
-      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference4.mp4"
-      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference5.mp4"
-      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference6.mp4"
-      - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference7.mp4"
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - usage_total_equals_completion
-
-  # ---------- 视频编辑 / 延长（所有 profile） ----------
-  - id: video_edit
-    name: 视频编辑（profile 自动应用合法 ratio/duration）
-    scenario: video_edit
-    prompt: "将参考视频中的主体替换为银色机器人，保持原有镜头运动和节奏"
-    reference_video_url: "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_edit_input.mov"
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - usage_total_equals_completion
-
-  - id: video_extend
-    name: 视频延长（profile 自动应用合法 ratio）
-    scenario: video_extend
-    prompt: "自然延长参考视频，保持场景、主体动作和镜头运动连续"
-    reference_video_url: "https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_extend_video1.mp4"
+    profile_overrides:
+      seedance-2.5:
+        reference_video_urls:
+          - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference2.mp4"
+          - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference3.mp4"
+          - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference4.mp4"
+          - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference5.mp4"
+          - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference6.mp4"
+          - "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference7.mp4"
     checks:
       - create_status_200
       - create_schema

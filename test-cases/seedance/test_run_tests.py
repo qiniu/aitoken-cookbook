@@ -31,40 +31,66 @@ class RunnerProfileTests(unittest.TestCase):
         }
 
     def test_profile_max_reference_content_combines_image_video_and_audio(self):
-        case = {
-            "prompt": "依次参考图像1至图像30的构图",
-            "reference_image_url": "https://example.test/product.png",
+        case = next(
+            item
+            for item in self.suite_cases
+            if item["id"] == "reference_images_profile_max"
+        )
+        expected_video_urls = [
+            "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference2.mp4",
+            "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference3.mp4",
+            "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference4.mp4",
+            "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference5.mp4",
+            "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference6.mp4",
+            "https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference7.mp4",
+        ]
+        results = {
+            profile_name: runner.run_case(
+                case,
+                schemas={},
+                config=self.suite_config,
+                profile=self.profiles[profile_name],
+                model="ep-custom",
+                base_url="",
+                api_key="",
+                dry_run=True,
+                no_poll=False,
+            )
+            for profile_name in self.profiles
         }
 
-        v25_content = runner.build_content(
-            "reference_images_profile_max",
-            self.config,
-            case,
-            self.profiles["seedance-2.5"],
-        )
-        v20_content = runner.build_content(
-            "reference_images_profile_max",
-            self.config,
-            case,
-            self.profiles["seedance-2.0"],
-        )
-
-        self.assertEqual(
-            len([item for item in v25_content if item.get("role") == "reference_image"]),
-            30,
-        )
-        self.assertEqual(
-            len([item for item in v20_content if item.get("role") == "reference_image"]),
-            9,
-        )
-        for content in (v25_content, v20_content):
+        for profile_name, result in results.items():
+            self.assertEqual(result.status, "pass", profile_name)
+            content = result.details["create_body"]["content"]
+            expected_image_count = 30 if profile_name == "seedance-2.5" else 9
             self.assertEqual(
-                len([item for item in content if item.get("role") == "reference_video"]),
-                1,
+                len(
+                    [item for item in content if item.get("role") == "reference_image"]
+                ),
+                expected_image_count,
+                profile_name,
             )
+            videos = [
+                item["video_url"]["url"]
+                for item in content
+                if item.get("role") == "reference_video"
+            ]
             self.assertEqual(
-                len([item for item in content if item.get("role") == "reference_audio"]),
-                1,
+                videos,
+                expected_video_urls
+                if profile_name == "seedance-2.5"
+                else [self.suite_config["reference_video_url"]],
+                profile_name,
+            )
+            audios = [
+                item["audio_url"]["url"]
+                for item in content
+                if item.get("role") == "reference_audio"
+            ]
+            self.assertEqual(
+                audios,
+                [self.suite_config["reference_audio_url"]],
+                profile_name,
             )
 
     def test_t2v_full_combines_25_duration_mov_and_common_checks(self):
@@ -111,10 +137,10 @@ class RunnerProfileTests(unittest.TestCase):
 
     def test_default_suite_limits_expected_video_jobs_per_profile(self):
         expected_counts = {
-            "seedance-2.5": 9,
-            "seedance-2.0": 7,
-            "seedance-2.0-fast": 7,
-            "seedance-2.0-mini": 7,
+            "seedance-2.5": 6,
+            "seedance-2.0": 5,
+            "seedance-2.0-fast": 5,
+            "seedance-2.0-mini": 5,
         }
 
         for profile_name, expected_count in expected_counts.items():
@@ -136,7 +162,7 @@ class RunnerProfileTests(unittest.TestCase):
             expected_video_jobs = [
                 result
                 for result in results
-                if result.status != "skipped"
+                if result.status == "pass"
                 and "create_error_status" not in result.details.get("checks", [])
             ]
             self.assertEqual(
@@ -155,21 +181,6 @@ class RunnerProfileTests(unittest.TestCase):
 
         self.assertEqual([item["type"] for item in content], ["text", "audio_url"])
         self.assertEqual(content[1]["role"], "reference_audio")
-
-    def test_six_video_content_uses_all_declared_urls(self):
-        urls = [f"https://example.test/reference-{number}.mp4" for number in range(1, 7)]
-        content = runner.build_content(
-            "multimodal_reference_6_videos",
-            self.config,
-            {
-                "reference_image_url": "https://example.test/product.png",
-                "reference_video_urls": urls,
-            },
-            self.profiles["seedance-2.5"],
-        )
-
-        videos = [item for item in content if item.get("role") == "reference_video"]
-        self.assertEqual([item["video_url"]["url"] for item in videos], urls)
 
     def test_content_over_profile_reference_limit_is_rejected_locally(self):
         with self.assertRaisesRegex(ValueError, "参考图片数量 10 超过 profile 上限 9"):
@@ -216,18 +227,12 @@ class RunnerProfileTests(unittest.TestCase):
         self.assertEqual(result.status, "skipped")
         self.assertIn("4k", result.details["skip_reason"])
 
-    def test_dry_run_applies_25_edit_constraints(self):
+    def test_i2v_first_frame_applies_25_adaptive_duration(self):
+        case = next(item for item in self.suite_cases if item["id"] == "i2v_first_frame")
         result = runner.run_case(
-            {
-                "id": "video_edit",
-                "name": "视频编辑",
-                "scenario": "video_edit",
-                "ratio": "16:9",
-                "duration": 5,
-                "reference_video_url": "https://example.test/edit.mov",
-            },
+            case,
             schemas={},
-            config=self.config,
+            config=self.suite_config,
             profile=self.profiles["seedance-2.5"],
             model="ep-custom",
             base_url="",

@@ -68,8 +68,8 @@ class ProfileTests(unittest.TestCase):
 
     def test_profile_override_wins_over_case_value_without_mutating_input(self):
         case = {
-            "id": "edit",
-            "scenario": "video_edit",
+            "id": "first-frame",
+            "scenario": "image_to_video",
             "duration": 5,
             "ratio": "16:9",
         }

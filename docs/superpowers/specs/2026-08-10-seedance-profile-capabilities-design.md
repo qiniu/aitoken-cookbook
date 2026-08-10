@@ -42,9 +42,8 @@
 
 Profile 同时声明 2.5 的任务参数限制：
 
-- 首帧、首尾帧：`ratio: adaptive`。
-- 视频编辑：`ratio: adaptive` 且 `duration: -1`。
-- 视频延长：`ratio: adaptive`。
+- 首帧：`ratio: adaptive` 且 `duration: -1`。
+- 首尾帧：`ratio: adaptive`。
 
 这些限制用于构造合法正向请求。测试不会通过发送已知非法参数来证明限制存在。
 
@@ -94,25 +93,20 @@ Profile 特有的合法请求参数使用 case 内的 `profile_overrides` 表达
 
 ### 共有用例
 
-现有文生、首帧、首尾帧、错误格式、真人拒绝和无效素材用例继续运行。文生能力参数按 profile 合并到单个 `t2v_full` 请求。
-
-新增两个共有任务类型用例：
-
-- 视频编辑：所有 profile 均执行；2.5 使用 `ratio: adaptive`、`duration: -1`，2.0 系列使用合法的普通时长。
-- 视频延长：所有 profile 均执行；2.5 使用 `ratio: adaptive`。
+现有文生、首帧、首尾帧、错误格式、真人拒绝和无效素材用例继续运行。文生能力参数按 profile 合并到单个 `t2v_full` 请求；2.5 的首帧用例同时承载 `duration: -1`。视频编辑和视频延长与多模态参考中的参考视频输入重复，不再单独创建任务。
 
 ### 按能力执行的用例
 
 | 用例 | 执行 profile | 核心断言 |
 |---|---|---|
 | `t2v_full` | 全部 | 2.5 单次验证 30 秒 + MOV；2.0 标准版单次验证 4K；Fast / Mini 单次验证 720p、5 秒；均同时验证通用文生流程与尾帧 |
+| `i2v_first_frame` | 全部 | 2.5 验证 `duration: -1`；2.0 / Fast / Mini 使用 5 秒 |
 | `audio_only_reference` | `seedance-2.5` | 仅文本和参考音频即可成功 |
-| `reference_images_profile_max` | 全部 | 单次合并图片上限与多模态：2.5 发送 30 图 + 1 视频 + 1 音频；2.0 系列发送 9 图 + 1 视频 + 1 音频 |
-| `multimodal_reference_6_videos` | `seedance-2.5` | 1 图 + 6 视频、总视频时长约 28.14 秒并成功 |
+| `reference_images_profile_max` | 全部 | 单次合并图片上限、多模态与多视频：2.5 发送 30 图 + 6 视频 + 1 音频；2.0 系列发送 9 图 + 1 视频 + 1 音频 |
 
-Fast 和 Mini 不执行纯音频与 6 视频用例；文生请求自身使用合法的 720p、5 秒参数，不再为不支持的文生能力创建独立 skipped case。
+Fast 和 Mini 不执行纯音频用例；合并的多模态请求只发送其 profile 所需的 1 段视频。文生请求自身使用合法的 720p、5 秒参数，不再为不支持的文生能力创建独立 skipped case。
 
-默认执行预计真正出片次数：Seedance 2.5 为 9 次，Seedance 2.0 标准版、Fast、Mini 均为 7 次。另有 3 个创建阶段应失败的负向请求，不会出片。允许多个能力参数合并后在创建阶段直接失败，测试不要求把失败归因到某一个具体参数。
+默认执行预计真正出片次数：Seedance 2.5 为 6 次，Seedance 2.0 标准版、Fast、Mini 均为 5 次。另有 3 个创建阶段应失败的负向请求，不会出片。允许多个能力参数合并后在创建阶段直接失败，测试不要求把失败归因到某一个具体参数。
 
 ## 官方素材
 
@@ -126,7 +120,7 @@ Fast 和 Mini 不执行纯音频与 6 视频用例；文生请求自身使用合
 
 重复 URL 仍形成独立请求项，用于验证接口接受对应数量；不声称验证了 9/30 个不同语义主体的生成质量。
 
-### 六视频参考
+### 合并的六视频参考
 
 使用官方 2.5 教程原有的 6 段参考视频：
 
@@ -139,11 +133,9 @@ Fast 和 Mini 不执行纯音频与 6 视频用例；文生请求自身使用合
 
 本次设计阶段用 `ffprobe` 验证的时长依次约为 5.062、5.085、3.553、5.085、4.267、5.085 秒，总计约 28.14 秒，符合 2.5 的 30 秒总时长限制。
 
-### 音频与编辑/延长
+### 音频
 
 - 纯音频参考：`https://ark-project.tos-cn-beijing.volces.com/doc_audio/r2v_tea_audio1.mp3`
-- 视频编辑：`https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_edit_input.mov`
-- 视频延长：使用火山教程公开的 `r2v_extend_video*` URL。
 
 当前官网可发现的适用 MP3/WAV 最短仍超过 6 秒，无法合法重复 10 次并保持总时长不超过 30 秒。因此本次不会添加 10 音频、10 视频或 50 总素材的误导性上限用例；profile 仍记录这些官方能力值。
 
@@ -152,10 +144,7 @@ Fast 和 Mini 不执行纯音频与 6 视频用例；文生请求自身使用合
 `build_create_body` 增加 `output_format` 透传。新增内容场景：
 
 - `audio_only_reference`：`[text, reference_audio]`
-- `video_edit`：`[text, reference_video]`，提示词明确触发编辑意图
-- `video_extend`：`[text, reference_video]`，提示词明确触发延长意图
-- `reference_images_profile_max`：根据 profile 生成 9 或 30 个 `reference_image`，并在同一请求加入 1 个 `reference_video` 与 1 个 `reference_audio`
-- `multimodal_reference_6_videos`：使用官方 1 图 + 6 视频组合
+- `reference_images_profile_max`：根据 profile 生成 9 或 30 个 `reference_image`，并在同一请求加入 1 或 6 个 `reference_video` 与 1 个 `reference_audio`
 
 请求构造阶段校验生成的素材数量没有超过 profile 声明值，配置错误应作为本地 `error` 返回，不发送请求。
 
@@ -195,9 +184,9 @@ Seedance 报告环境区新增 profile。每个 case 的 details 继续保存最
 实现时增加不访问真实 API 的自动化测试，覆盖：
 
 1. 四个 profile 的加载、必填参数和未知值错误。
-2. 4K、30 秒、MOV、纯音频及六视频用例的选择和跳过原因。
-3. `profile_overrides` 优先级及 2.5 编辑/延长合法参数。
-4. 9/30 图片项和六视频项的请求体结构、role、数量。
+2. 4K、30 秒、MOV、纯音频及合并六视频参数的选择和跳过原因。
+3. `profile_overrides` 优先级及 2.5 首帧 `duration: -1` 参数。
+4. 9/30 图片项和 1/6 视频项的请求体结构、role、数量。
 5. `output_format` 透传。
 6. 查询 resolution/duration 匹配和不匹配。
 7. MOV `ftyp/qt` 文件头识别及异常响应。

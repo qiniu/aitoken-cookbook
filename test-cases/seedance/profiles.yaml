@@ -12,12 +12,8 @@ profiles:
     scenario_overrides:
       image_to_video:
         ratio: adaptive
-      start_end_to_video:
-        ratio: adaptive
-      video_edit:
-        ratio: adaptive
         duration: -1
-      video_extend:
+      start_end_to_video:
         ratio: adaptive
 
   seedance-2.0:

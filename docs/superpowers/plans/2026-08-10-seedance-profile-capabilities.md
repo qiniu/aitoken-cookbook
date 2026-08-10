@@ -131,7 +131,7 @@ class ProfileTests(unittest.TestCase):
 
     def test_profile_override_wins_over_case_value(self):
         profile = load_profiles()["seedance-2.5"]
-        case = {"scenario": "video_edit", "duration": 5, "ratio": "16:9"}
+        case = {"scenario": "image_to_video", "duration": 5, "ratio": "16:9"}
         merged = apply_profile_overrides(case, profile)
         self.assertEqual(merged["duration"], -1)
         self.assertEqual(merged["ratio"], "adaptive")
@@ -157,10 +157,8 @@ profiles:
     max_reference_audios: 10
     max_total_reference_assets: 50
     scenario_overrides:
-      image_to_video: {ratio: adaptive}
+      image_to_video: {ratio: adaptive, duration: -1}
       start_end_to_video: {ratio: adaptive}
-      video_edit: {ratio: adaptive, duration: -1}
-      video_extend: {ratio: adaptive}
 ```
 
 Add 2.0 standard, Fast, and Mini with the exact values from the approved design.
@@ -232,7 +230,7 @@ def test_unsupported_case_is_skipped_without_sending_request(self):
     self.assertIn("4k", result.details["skip_reason"])
 ```
 
-Also assert audio-only content is exactly text + reference audio, six-video content contains six `reference_video` items, `output_format` is copied into the request body, and 2.5 edit overrides produce `ratio=adaptive` and `duration=-1`.
+Also assert audio-only content is exactly text + reference audio, the 2.5 profile-max request contains six `reference_video` items, `output_format` is copied into the request body, and the 2.5 first-frame override produces `ratio=adaptive` and `duration=-1`.
 
 - [ ] **Step 2: Run runner tests and verify signature/scenario failures**
 
@@ -257,11 +255,11 @@ Use `effective_case` for content, body, checks, expected error code, and polling
 
 - [ ] **Step 4: Add scenario builders and output_format**
 
-Add builders for `audio_only_reference`, `video_edit`, `video_extend`, `reference_images_profile_max`, and `multimodal_reference_6_videos`. `reference_images_profile_max` combines the profile image maximum with one video and one audio reference. Extend the optional body-key loop with `output_format`.
+Add builders for `audio_only_reference` and `reference_images_profile_max`. `reference_images_profile_max` combines the profile image maximum with six videos for 2.5 or one video for 2.0, plus one audio reference. Extend the optional body-key loop with `output_format`.
 
 - [ ] **Step 5: Replace and add YAML cases with official URLs**
 
-Merge 2.5 30-second/MOV checks and 2.0-standard 4K checks into profile-specific overrides of the single `t2v_full` request. Add `audio_only_reference`, the combined `reference_images_profile_max`, `multimodal_reference_6_videos`, `video_edit`, and `video_extend` using the exact URLs in the design spec. Change the global ratio to `adaptive`.
+Merge 2.5 30-second/MOV checks and 2.0-standard 4K checks into profile-specific overrides of the single `t2v_full` request. Add `audio_only_reference` and the combined `reference_images_profile_max` using the exact URLs in the design spec. Put 2.5 `duration=-1` on the existing first-frame request and change the global ratio to `adaptive`.
 
 - [ ] **Step 6: Require the CLI profile and record it**
 
@@ -285,7 +283,7 @@ python test-cases/seedance/run_tests.py --dry-run --profile seedance-2.0-fast --
 python test-cases/seedance/run_tests.py --dry-run --profile seedance-2.0-mini --out /tmp/seedance-mini-report
 ```
 
-Expected: all commands exit 0; 2.5 skips 4K and 2.0 variants skip 2.5-only capabilities.
+Expected: all commands exit 0; 2.5 全部 9 个 case 通过，2.0 variants 各有 8 个 case 通过、纯音频 case 跳过。预计真正出片数分别为 6 / 5 / 5 / 5。
 
 - [ ] **Step 8: Commit profile-aware execution**
 
