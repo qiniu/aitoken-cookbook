@@ -76,7 +76,7 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `multimodal_reference` | `[text, reference_image, reference_video, reference_audio]` | 多素材 URL |
 | `audio_only_reference` | `[text, reference_audio]` | 1 音频 URL |
 | `video_edit` / `video_extend` | `[text, reference_video]` | 1 视频 URL |
-| `reference_images_profile_max` | `[text, reference_image × profile 上限]` | 1 图片 URL 重复为 9/30 个请求项 |
+| `reference_images_profile_max` | `[text, reference_image × profile 上限, reference_video, reference_audio]` | 9/30 图片项 + 1 视频 + 1 音频 |
 | `multimodal_reference_6_videos` | `[text, reference_image, reference_video × 6]` | 1 图片 + 6 视频 URL |
 
 ### Profile 与能力用例
@@ -94,22 +94,22 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 
 | 用例 | 执行 profile | 验证内容 |
 |------|------|------|
-| `t2v_4k` | `seedance-2.0` | 成功且查询响应 `resolution == 4k` |
-| `t2v_30s` | `seedance-2.5` | 成功且查询响应 `duration == 30` |
-| `t2v_output_mov` | `seedance-2.5` | 产物文件头确认为 QuickTime MOV 容器 |
+| `t2v_full` | `seedance-2.5` | 单次请求同时验证 30 秒、MOV、返回尾帧、进行中/成功态与计费字段 |
+| `t2v_full` | `seedance-2.0` | 单次请求同时验证 4K、返回尾帧、进行中/成功态与计费字段 |
+| `t2v_full` | Fast / Mini | 单次 720p、5 秒请求验证通用文生全流程 |
 | `audio_only_reference` | `seedance-2.5` | 仅文本和参考音频即可成功 |
-| `reference_images_profile_max` | 全部 | 2.5 发送 30 个图片项，2.0 系列发送 9 个 |
+| `reference_images_profile_max` | 全部 | 单次请求合并图片上限与多模态：2.5 为 30 图 + 1 视频 + 1 音频，2.0 系列为 9 图 + 1 视频 + 1 音频 |
 | `multimodal_reference_6_videos` | `seedance-2.5` | 官方 1 图 + 6 视频参考成功 |
 
 视频编辑和视频延长在所有 profile 执行。2.5 会自动应用官方限制：首帧/首尾帧使用 `ratio: adaptive`，视频编辑使用 `ratio: adaptive` 与 `duration: -1`，视频延长使用 `ratio: adaptive`。
 
-文生视频主用例（`t2v_full`，720p）用**一次视频生成**承载全部可复用的文生校验，避免重复出片：
+文生视频主用例 `t2v_full` 对每个 profile 只生成一次视频，并通过 profile 覆盖合并能力参数：2.5 请求 30 秒 MOV，2.0 标准版请求 4K，Fast / Mini 请求 720p、5 秒。该请求同时承载全部可复用的文生校验：
 
 - **进行中态**（`status_queued_or_running`）：判**首次轮询响应**——创建后第一次查询天然处于 `queued` / `running`，因此不必为「进行中态」单独建任务。
 - **尾帧透传**（`return_last_frame: true` + `succeeded_has_last_frame`）：尾帧只是个请求参数，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现），挂在本用例上不额外生成视频。
 - **火山原生格式软校验**（`id_volc_format` + `video_url_is_volc`）：复用已生成的视频，提示任务 id 形如 `cgt-20260420145835-68j7n`、`content.video_url` 的 host 以 `volces.com` 结尾。不满足只记警告（提示自行生成非火山格式 ID 或把视频转存到自有 CDN），不判失败。详见下文[软校验](#软校验warn_checks)。
 
-> 4k 用例（`t2v_4k`）独立保留而不与主用例合并：4k 仅 Seedance 2.0 支持，若把它当作唯一的文生基线，不支持 4k 的被测实现会连带丢失全部文生视频覆盖。
+按默认用例执行时，Seedance 2.5 预计真正出片 9 次（30 秒文生 1 次、5 秒任务 7 次、`duration: -1` 视频编辑 1 次）；Seedance 2.0 标准版、Fast 和 Mini 各预计出片 7 次，均为 5 秒任务。另有 3 个创建阶段应失败的负向请求，不会出片。
 
 外加一个多图参考正向用例：参考图传两个**火山官方公开素材**的 `asset://` 引用（`asset-20260224190652-n8sd2` 洛丽塔连衣裙、`asset-20260401123823-6d4x2` 中国 26 岁女性网红），prompt 让「图2的女生穿上图1的裙子」，多图参考合成并轮询到成功。与下方无效素材负向用例互为正反面，验证兼容火山方舟的实现能正确解析有效 `asset://` 引用并生成视频。
 

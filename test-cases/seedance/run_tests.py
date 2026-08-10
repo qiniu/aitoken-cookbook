@@ -260,8 +260,16 @@ def build_content(
         content = [
             text_item,
             {"type": "image_url", "image_url": {"url": pick("reference_image_url")}, "role": "reference_image"},
-            {"type": "video_url", "video_url": {"url": pick("reference_video_url")}, "role": "reference_video"},
-            {"type": "audio_url", "audio_url": {"url": pick("reference_audio_url")}, "role": "reference_audio"},
+            {
+                "type": "video_url",
+                "video_url": {"url": pick("reference_video_url")},
+                "role": "reference_video",
+            },
+            {
+                "type": "audio_url",
+                "audio_url": {"url": pick("reference_audio_url")},
+                "role": "reference_audio",
+            },
         ]
 
     elif scenario == "audio_only_reference":
@@ -284,6 +292,16 @@ def build_content(
                 {"type": "image_url", "image_url": {"url": url}, "role": "reference_image"}
                 for _ in range(profile.max_reference_images)
             ],
+            {
+                "type": "video_url",
+                "video_url": {"url": pick("reference_video_url")},
+                "role": "reference_video",
+            },
+            {
+                "type": "audio_url",
+                "audio_url": {"url": pick("reference_audio_url")},
+                "role": "reference_audio",
+            },
         ]
 
     elif scenario == "multimodal_reference_6_videos":

@@ -94,7 +94,7 @@ Profile 特有的合法请求参数使用 case 内的 `profile_overrides` 表达
 
 ### 共有用例
 
-现有文生、首帧、首尾帧、组合多模态参考、返回尾帧、立即查询、错误格式、真人拒绝和无效素材用例继续运行。通用分辨率采用 720p。
+现有文生、首帧、首尾帧、错误格式、真人拒绝和无效素材用例继续运行。文生能力参数按 profile 合并到单个 `t2v_full` 请求。
 
 新增两个共有任务类型用例：
 
@@ -105,14 +105,14 @@ Profile 特有的合法请求参数使用 case 内的 `profile_overrides` 表达
 
 | 用例 | 执行 profile | 核心断言 |
 |---|---|---|
-| `t2v_4k` | `seedance-2.0` | 成功且查询响应 `resolution == 4k` |
-| `t2v_30s` | `seedance-2.5` | 成功且查询响应 `duration == 30` |
-| `t2v_output_mov` | `seedance-2.5` | 成功且产物实际为 QuickTime MOV 容器 |
+| `t2v_full` | 全部 | 2.5 单次验证 30 秒 + MOV；2.0 标准版单次验证 4K；Fast / Mini 单次验证 720p、5 秒；均同时验证通用文生流程与尾帧 |
 | `audio_only_reference` | `seedance-2.5` | 仅文本和参考音频即可成功 |
-| `reference_images_profile_max` | 全部 | 2.5 发送 30 个图片项；2.0 系列发送 9 个图片项并成功 |
+| `reference_images_profile_max` | 全部 | 单次合并图片上限与多模态：2.5 发送 30 图 + 1 视频 + 1 音频；2.0 系列发送 9 图 + 1 视频 + 1 音频 |
 | `multimodal_reference_6_videos` | `seedance-2.5` | 1 图 + 6 视频、总视频时长约 28.14 秒并成功 |
 
-Fast 和 Mini 不执行 4K、30 秒、MOV、纯音频以及 6 视频用例；报告明确标记跳过原因。
+Fast 和 Mini 不执行纯音频与 6 视频用例；文生请求自身使用合法的 720p、5 秒参数，不再为不支持的文生能力创建独立 skipped case。
+
+默认执行预计真正出片次数：Seedance 2.5 为 9 次，Seedance 2.0 标准版、Fast、Mini 均为 7 次。另有 3 个创建阶段应失败的负向请求，不会出片。允许多个能力参数合并后在创建阶段直接失败，测试不要求把失败归因到某一个具体参数。
 
 ## 官方素材
 
@@ -154,7 +154,7 @@ Fast 和 Mini 不执行 4K、30 秒、MOV、纯音频以及 6 视频用例；报
 - `audio_only_reference`：`[text, reference_audio]`
 - `video_edit`：`[text, reference_video]`，提示词明确触发编辑意图
 - `video_extend`：`[text, reference_video]`，提示词明确触发延长意图
-- `reference_images_profile_max`：根据 profile 生成 9 或 30 个 `reference_image`
+- `reference_images_profile_max`：根据 profile 生成 9 或 30 个 `reference_image`，并在同一请求加入 1 个 `reference_video` 与 1 个 `reference_audio`
 - `multimodal_reference_6_videos`：使用官方 1 图 + 6 视频组合
 
 请求构造阶段校验生成的素材数量没有超过 profile 声明值，配置错误应作为本地 `error` 返回，不发送请求。

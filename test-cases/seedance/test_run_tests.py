@@ -15,6 +15,7 @@ class RunnerProfileTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.profiles = load_profiles()
+        cls.suite_config, cls.suite_cases = runner.load_cases()
         cls.config = {
             "prompt": "生成测试视频",
             "first_frame_url": "https://example.test/first.png",
@@ -29,7 +30,7 @@ class RunnerProfileTests(unittest.TestCase):
             "poll_timeout": 10,
         }
 
-    def test_profile_max_image_content_count(self):
+    def test_profile_max_reference_content_combines_image_video_and_audio(self):
         case = {
             "prompt": "依次参考图像1至图像30的构图",
             "reference_image_url": "https://example.test/product.png",
@@ -56,6 +57,93 @@ class RunnerProfileTests(unittest.TestCase):
             len([item for item in v20_content if item.get("role") == "reference_image"]),
             9,
         )
+        for content in (v25_content, v20_content):
+            self.assertEqual(
+                len([item for item in content if item.get("role") == "reference_video"]),
+                1,
+            )
+            self.assertEqual(
+                len([item for item in content if item.get("role") == "reference_audio"]),
+                1,
+            )
+
+    def test_t2v_full_combines_25_duration_mov_and_common_checks(self):
+        case = next(item for item in self.suite_cases if item["id"] == "t2v_full")
+
+        result = runner.run_case(
+            case,
+            schemas={},
+            config=self.suite_config,
+            profile=self.profiles["seedance-2.5"],
+            model="ep-custom",
+            base_url="",
+            api_key="",
+            dry_run=True,
+            no_poll=False,
+        )
+
+        self.assertEqual(result.details["create_body"]["duration"], 30)
+        self.assertEqual(result.details["create_body"]["output_format"], "mov")
+        self.assertIn("query_duration_matches_request", result.details["checks"])
+        self.assertIn(
+            "succeeded_video_format_matches_request", result.details["checks"]
+        )
+        self.assertIn("succeeded_has_last_frame", result.details["checks"])
+
+    def test_t2v_full_combines_20_standard_4k_and_common_checks(self):
+        case = next(item for item in self.suite_cases if item["id"] == "t2v_full")
+
+        result = runner.run_case(
+            case,
+            schemas={},
+            config=self.suite_config,
+            profile=self.profiles["seedance-2.0"],
+            model="ep-custom",
+            base_url="",
+            api_key="",
+            dry_run=True,
+            no_poll=False,
+        )
+
+        self.assertEqual(result.details["create_body"]["resolution"], "4k")
+        self.assertIn("query_resolution_matches_request", result.details["checks"])
+        self.assertIn("succeeded_has_last_frame", result.details["checks"])
+
+    def test_default_suite_limits_expected_video_jobs_per_profile(self):
+        expected_counts = {
+            "seedance-2.5": 9,
+            "seedance-2.0": 7,
+            "seedance-2.0-fast": 7,
+            "seedance-2.0-mini": 7,
+        }
+
+        for profile_name, expected_count in expected_counts.items():
+            profile = self.profiles[profile_name]
+            results = [
+                runner.run_case(
+                    case,
+                    schemas={},
+                    config=self.suite_config,
+                    profile=profile,
+                    model="ep-custom",
+                    base_url="",
+                    api_key="",
+                    dry_run=True,
+                    no_poll=False,
+                )
+                for case in self.suite_cases
+            ]
+            expected_video_jobs = [
+                result
+                for result in results
+                if result.status != "skipped"
+                and "create_error_status" not in result.details.get("checks", [])
+            ]
+            self.assertEqual(
+                len(expected_video_jobs),
+                expected_count,
+                profile_name,
+            )
 
     def test_audio_only_content_has_no_image_or_video(self):
         content = runner.build_content(

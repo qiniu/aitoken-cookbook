@@ -257,11 +257,11 @@ Use `effective_case` for content, body, checks, expected error code, and polling
 
 - [ ] **Step 4: Add scenario builders and output_format**
 
-Add builders for `audio_only_reference`, `video_edit`, `video_extend`, `reference_images_profile_max`, and `multimodal_reference_6_videos`. Extend the optional body-key loop with `output_format`.
+Add builders for `audio_only_reference`, `video_edit`, `video_extend`, `reference_images_profile_max`, and `multimodal_reference_6_videos`. `reference_images_profile_max` combines the profile image maximum with one video and one audio reference. Extend the optional body-key loop with `output_format`.
 
 - [ ] **Step 5: Replace and add YAML cases with official URLs**
 
-Rename `t2v_basic` to `t2v_4k` and add `requires: {resolution: 4k}`. Add `t2v_30s`, `t2v_output_mov`, `audio_only_reference`, `reference_images_profile_max`, `multimodal_reference_6_videos`, `video_edit`, and `video_extend` using the exact URLs in the design spec. Change the global ratio to `adaptive`.
+Merge 2.5 30-second/MOV checks and 2.0-standard 4K checks into profile-specific overrides of the single `t2v_full` request. Add `audio_only_reference`, the combined `reference_images_profile_max`, `multimodal_reference_6_videos`, `video_edit`, and `video_extend` using the exact URLs in the design spec. Change the global ratio to `adaptive`.
 
 - [ ] **Step 6: Require the CLI profile and record it**
 

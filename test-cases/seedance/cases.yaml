@@ -15,7 +15,7 @@
 #   audio_only_reference  纯音频参考：content=[text, reference_audio]
 #   video_edit            视频编辑：content=[text, reference_video]
 #   video_extend          视频延长：content=[text, reference_video]
-#   reference_images_profile_max       按 profile 生成 9/30 个参考图片项
+#   reference_images_profile_max       按 profile 生成 9/30 图 + 1 视频 + 1 音频
 #   multimodal_reference_6_videos      1 图 + 6 视频参考
 #
 # 可用的 checks（含义见 run_tests.py）：
@@ -73,62 +73,14 @@ poll_timeout: 1200    # 单个任务轮询总超时（秒）；首尾帧/多模�
 
 cases:
   # ---------- 文生视频 ----------
-  # 仅声明支持 4k 的 profile 执行；其他 profile 记录为 skipped。
-  - id: t2v_4k
-    name: 文生视频 4k 分辨率（轮询到成功出片）
-    scenario: text_to_video
-    requires:
-      resolution: 4k
-    resolution: "4k"
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - usage_total_equals_completion
-      - query_resolution_matches_request
-
-  # Seedance 2.5 最长支持 30 秒；2.0 系列自动跳过。
-  - id: t2v_30s
-    name: 文生视频 30 秒（轮询到成功且查询时长一致）
-    scenario: text_to_video
-    requires:
-      min_max_duration: 30
-    duration: 30
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - usage_total_equals_completion
-      - query_duration_matches_request
-
-  # 查询接口不返回 output_format，因此成功后读取视频文件头验证 QuickTime MOV 容器。
-  - id: t2v_output_mov
-    name: 文生视频 MOV 输出（验证 QuickTime 容器）
-    scenario: text_to_video
-    requires:
-      output_format: mov
-    output_format: mov
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - succeeded_video_format_matches_request
-
-  # 文生视频主用例：一次视频生成承载全部可复用的文生校验，避免重复出片。
+  # 文生视频主用例：每个 profile 只生成一次视频，并把能力参数与检查合并到该请求。
+  #   2.5          30 秒 + MOV + 返回尾帧
+  #   2.0 标准版  4k + 返回尾帧
+  #   Fast / Mini  720p、5 秒 + 返回尾帧
   #   status_queued_or_running  判首次轮询响应（创建后第一次查询天然是进行中态）
-  #   return_last_frame:true    尾帧透传只是请求参数，挂在本用例上不额外生成视频
   #   warn_checks               复用已生成的视频做火山原生格式软校验
   - id: t2v_full
-    name: 文生视频 全流程（进行中态 + 轮询到成功 + 计费字段 + 尾帧透传 + 火山原生格式）
+    name: 文生视频 Profile 全流程（能力参数 + 进行中态 + 成功态 + 计费 + 尾帧）
     scenario: text_to_video
     return_last_frame: true
     checks:
@@ -141,6 +93,35 @@ cases:
       - succeeded_schema
       - usage_total_equals_completion
       - succeeded_has_last_frame
+    profile_overrides:
+      seedance-2.5:
+        duration: 30
+        output_format: mov
+        checks:
+          - create_status_200
+          - create_schema
+          - query_status_200
+          - query_schema
+          - status_queued_or_running
+          - reached_succeeded
+          - succeeded_schema
+          - usage_total_equals_completion
+          - succeeded_has_last_frame
+          - query_duration_matches_request
+          - succeeded_video_format_matches_request
+      seedance-2.0:
+        resolution: "4k"
+        checks:
+          - create_status_200
+          - create_schema
+          - query_status_200
+          - query_schema
+          - status_queued_or_running
+          - reached_succeeded
+          - succeeded_schema
+          - usage_total_equals_completion
+          - succeeded_has_last_frame
+          - query_resolution_matches_request
     # 软校验（警告级，不影响 pass/fail）：复用本用例已生成的视频，额外提示任务 id
     # 与视频链接是否为火山原生格式；不新增视频生成，零额外耗时。
     warn_checks:
@@ -173,21 +154,6 @@ cases:
       - succeeded_schema
       - usage_total_equals_completion
 
-  # ---------- 多模态参考生视频 ----------
-  - id: multimodal_ref
-    name: 多模态参考生视频 全流程（参考图+视频+音频，轮询到成功）
-    scenario: multimodal_reference
-    # 多模态参考有声视频建议开启音频生成
-    generate_audio: true
-    checks:
-      - create_status_200
-      - create_schema
-      - query_status_200
-      - query_schema
-      - reached_succeeded
-      - succeeded_schema
-      - usage_total_equals_completion
-
   # ---------- Seedance 2.5 能力：纯音频参考 ----------
   - id: audio_only_reference
     name: 纯音频参考生视频（文本 + 官方音频 URL）
@@ -204,12 +170,13 @@ cases:
       - succeeded_schema
       - usage_total_equals_completion
 
-  # ---------- Profile 图片参考上限：2.5 为 30，2.0 系列为 9 ----------
+  # ---------- Profile 图片参考上限 + 多模态：图片 9/30 + 视频 1 + 音频 1 ----------
   - id: reference_images_profile_max
-    name: 按 profile 上限提交参考图片（9/30 项）
+    name: 按 profile 图片上限提交多模态参考（9/30 图 + 1 视频 + 1 音频）
     scenario: reference_images_profile_max
-    prompt: "依次参考图像1至最后一张图像的产品外观、构图和光影，生成连贯的视频"
+    prompt: "参考全部图片的产品外观、视频的镜头运动和音频节奏，生成连贯的视频"
     reference_image_url: "https://arkdocs.tos-cn-beijing.volces.com/images/video-generation/seedance2.5_reference1.png"
+    generate_audio: true
     checks:
       - create_status_200
       - create_schema
