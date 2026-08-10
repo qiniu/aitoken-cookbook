@@ -13,8 +13,10 @@
 
 格式权威来源（火山官方文档）：
 
-- [创建视频生成任务](https://www.volcengine.com/docs/82379/1520757?lang=zh)
-- [查询视频生成任务](https://www.volcengine.com/docs/82379/1521309?lang=zh)
+- [创建视频生成任务](https://docs.volcengine.com/docs/82379/1520757?lang=zh)
+- [查询视频生成任务](https://docs.volcengine.com/docs/82379/1521309?lang=zh)
+- [Doubao Seedance 2.5 使用教程](https://docs.volcengine.com/docs/82379/2607688?lang=zh)
+- [Doubao Seedance 2.0 系列使用教程](https://docs.volcengine.com/docs/82379/2291680?lang=zh)
 
 ## 校验方式
 
@@ -46,6 +48,9 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `error_schema` | 错误响应通过 `error_response.schema.json` |
 | `error_code_matches` | `error.code` 精确等于 case 声明的 `expected_error_code`（负向用例） |
 | `status_queued_or_running` | 首次查询 `status` 为 `queued` 或 `running`（进行中态）；判的是创建后第一次查询的响应，故可与 `reached_succeeded` 同时声明，无需为进行中态单独建任务 |
+| `query_resolution_matches_request` | 查询响应的 `resolution` 与创建请求一致（用于 4K） |
+| `query_duration_matches_request` | 查询响应的 `duration` 与创建请求一致（用于 30 秒） |
+| `succeeded_video_format_matches_request` | 对生成 URL 发 Range 请求，确认 MOV 产物的 `ftyp` major brand 为 `qt  ` |
 
 计费字段（`usage`）不写死数值，仅由 schema 约束类型与 `minimum: 1`。
 
@@ -69,8 +74,34 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 | `reference_to_video` | `[text, image_url(reference_image), ...]` | 1 参考图 URL；case 声明 `reference_image_urls`（列表）可传多张 |
 | `start_end_to_video` | `[text, image_url(first_frame), image_url(last_frame)]` | 2 图 URL |
 | `multimodal_reference` | `[text, reference_image, reference_video, reference_audio]` | 多素材 URL |
+| `audio_only_reference` | `[text, reference_audio]` | 1 音频 URL |
+| `video_edit` / `video_extend` | `[text, reference_video]` | 1 视频 URL |
+| `reference_images_profile_max` | `[text, reference_image × profile 上限]` | 1 图片 URL 重复为 9/30 个请求项 |
+| `multimodal_reference_6_videos` | `[text, reference_image, reference_video × 6]` | 1 图片 + 6 视频 URL |
 
-基础文生视频用例（`t2v_basic`）请求 `resolution: 4k` 并轮询到 `succeeded`，校验成功态结构（必有 `content.video_url` 与 `usage`）——`4k`（3840×2160、10bit 位深）仅 **Seedance 2.0**（本套件默认模型 `doubao-seedance-2-0-260128`）支持，用于验证被测服务接受并能完成 4k 视频生成任务；不支持 4k 的实现会在创建时报错或轮询不到 `succeeded`。
+### Profile 与能力用例
+
+`--model` 只写入请求体，可以是官方 Model ID、Endpoint ID 或自定义模型别名；测试程序不会从字符串推断模型版本。必填的 `--profile` 独立声明被测模型的能力：
+
+| Profile | 分辨率 | 最长时长 | 输出格式 | 纯音频参考 | 图片/视频/音频/总素材上限 |
+|------|------|------:|------|------|------|
+| `seedance-2.5` | 480p、720p | 30 秒 | mp4、mov | 支持 | 30 / 10 / 10 / 50 |
+| `seedance-2.0` | 480p、720p、1080p、4k | 15 秒 | mp4 | 不支持 | 9 / 3 / 3 / 15 |
+| `seedance-2.0-fast` | 480p、720p | 15 秒 | mp4 | 不支持 | 9 / 3 / 3 / 15 |
+| `seedance-2.0-mini` | 480p、720p | 15 秒 | mp4 | 不支持 | 9 / 3 / 3 / 15 |
+
+所有能力用例默认包含在测试集合中。不满足当前 profile 的用例不会发请求，而是以 `skipped` 记录具体原因；`skipped` 不影响整体 PASS/FAIL。
+
+| 用例 | 执行 profile | 验证内容 |
+|------|------|------|
+| `t2v_4k` | `seedance-2.0` | 成功且查询响应 `resolution == 4k` |
+| `t2v_30s` | `seedance-2.5` | 成功且查询响应 `duration == 30` |
+| `t2v_output_mov` | `seedance-2.5` | 产物文件头确认为 QuickTime MOV 容器 |
+| `audio_only_reference` | `seedance-2.5` | 仅文本和参考音频即可成功 |
+| `reference_images_profile_max` | 全部 | 2.5 发送 30 个图片项，2.0 系列发送 9 个 |
+| `multimodal_reference_6_videos` | `seedance-2.5` | 官方 1 图 + 6 视频参考成功 |
+
+视频编辑和视频延长在所有 profile 执行。2.5 会自动应用官方限制：首帧/首尾帧使用 `ratio: adaptive`，视频编辑使用 `ratio: adaptive` 与 `duration: -1`，视频延长使用 `ratio: adaptive`。
 
 文生视频主用例（`t2v_full`，720p）用**一次视频生成**承载全部可复用的文生校验，避免重复出片：
 
@@ -78,7 +109,7 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 - **尾帧透传**（`return_last_frame: true` + `succeeded_has_last_frame`）：尾帧只是个请求参数，校验成功响应在 `content.last_frame_url` 返回尾帧图（用于识别不透传该参数的实现），挂在本用例上不额外生成视频。
 - **火山原生格式软校验**（`id_volc_format` + `video_url_is_volc`）：复用已生成的视频，提示任务 id 形如 `cgt-20260420145835-68j7n`、`content.video_url` 的 host 以 `volces.com` 结尾。不满足只记警告（提示自行生成非火山格式 ID 或把视频转存到自有 CDN），不判失败。详见下文[软校验](#软校验warn_checks)。
 
-> 4k 用例（`t2v_basic`）独立保留而不与主用例合并：4k 仅 Seedance 2.0 支持，若把它当作唯一的文生基线，不支持 4k 的被测实现会连带丢失全部文生视频覆盖。
+> 4k 用例（`t2v_4k`）独立保留而不与主用例合并：4k 仅 Seedance 2.0 支持，若把它当作唯一的文生基线，不支持 4k 的被测实现会连带丢失全部文生视频覆盖。
 
 外加一个多图参考正向用例：参考图传两个**火山官方公开素材**的 `asset://` 引用（`asset-20260224190652-n8sd2` 洛丽塔连衣裙、`asset-20260401123823-6d4x2` 中国 26 岁女性网红），prompt 让「图2的女生穿上图1的裙子」，多图参考合成并轮询到成功。与下方无效素材负向用例互为正反面，验证兼容火山方舟的实现能正确解析有效 `asset://` 引用并生成视频。
 
@@ -95,8 +126,9 @@ schema 表达不了的跨字段 / 流程语义，保留为少量命名 check：
 
 ### 输入素材
 
-图生 / 首尾帧 / 多模态参考场景需要输入图 / 视频 / 音频，用**公网 URL**提供，集中配置在
-`cases.yaml` 顶部，默认填火山官方文档示例素材（`ark-project.tos-cn-beijing.volces.com/...`）。
+图生 / 首尾帧 / 多模态参考场景的素材全部通过**公网 URL**提供，不使用 Base64 或本地媒体 fixture。默认值与新增能力用例均采用火山官方文档中的 `ark-project.tos-cn-beijing.volces.com` 或 `arkdocs.tos-cn-beijing.volces.com` 示例链接。
+
+六视频用例使用 Seedance 2.5 教程中的 6 段视频，时长约为 5.062、5.085、3.553、5.085、4.267、5.085 秒，总计约 28.14 秒。当前官方可用示例无法在 30 秒总时长限制内合法覆盖 10 段视频、10 段音频或 50 个总素材，因此本套件不声称覆盖这三个上限；profile 仍记录官方能力值供本地请求数量校验。
 
 > 被测服务需能访问这些公网 URL。如环境访问不到，请在 `cases.yaml` 顶部替换为你自己的素材 URL。
 
@@ -117,7 +149,7 @@ HTTP 请求使用标准库 `urllib`，无需安装 requests。相比 gpt-image-2
 export API_BASE_URL="https://your-domain.com/api/v3"   # 被测接口地址
 export API_KEY="your-api-key"                          # 被测接口密钥
 export SEEDANCE_MODEL="doubao-seedance-2-0-260128"     # 被测模型 id（也可用 --model 覆盖）
-python run_tests.py
+python run_tests.py --profile seedance-2.0
 ```
 
 所有 case 默认**并发**执行（视频生成较慢，串行会很耗时），各 case 内部独立轮询，
@@ -131,16 +163,16 @@ python run_tests.py
 | `API_KEY` | 无（必填） | 被测接口的鉴权密钥 |
 | `SEEDANCE_MODEL` | `doubao-seedance-2-0-260128` | 被测模型 id（也可用 `--model` 覆盖） |
 
-被测模型 id 可自定义，命令行参数优先于环境变量：
+被测模型标识可自定义，命令行参数优先于环境变量。以下示例使用 Endpoint ID / 自定义别名，并显式指定其真实能力档案：
 
 ```bash
-python run_tests.py --model your-model-name
+python run_tests.py --model ep-custom-seedance-prod --profile seedance-2.5
 ```
 
 仅创建 + 单次查询、不等待终态（快速冒烟，省时省钱；此时不要让 case 声明 `reached_succeeded`）：
 
 ```bash
-python run_tests.py --no-poll
+python run_tests.py --profile seedance-2.0-mini --no-poll
 ```
 
 也可在单个 case 上声明 `poll: once`，与其它需轮询到终态的 case 混跑。
@@ -148,7 +180,7 @@ python run_tests.py --no-poll
 不打真实接口、仅自测「请求体构造与 schema 加载」（无需配置地址和密钥）：
 
 ```bash
-python run_tests.py --dry-run
+python run_tests.py --profile seedance-2.5 --dry-run
 ```
 
 轮询间隔与超时在 `cases.yaml` 顶部配置（`poll_interval` / `poll_timeout`，单位秒）。
@@ -157,13 +189,14 @@ python run_tests.py --dry-run
 
 运行后在 `reports/` 下生成 `report.json` / `report.md` / `report.html`
 三份报告，格式见 [test-cases 总览](../README.md#结果格式)。
-进程退出码：全部通过为 0，否则为 1（**软校验警告不影响退出码**）。
+进程退出码：执行的用例全部通过为 0，否则为 1（`skipped` 与软校验警告均不影响退出码）。
 
 `warn_checks` 产生的软校验警告记录在每个 case 的 `warnings` 列，摘要行以「警告 N」计数，HTML 报告中带警告的通过用例以淡黄底标记。
 
 每个 case 的 `details` 会完整记录本次请求与响应，便于失败定位：
 
-- `scenario` / `model`：场景与被测模型
+- `scenario` / `model` / `profile`：场景、请求中的模型标识与能力档案
+- `skip_reason`：用例因 profile 不支持而跳过时的具体原因
 - `create_url` / `create_body`：创建任务的请求 URL 与请求体
 - `task_id` / `polls` / `task_status`：任务 ID、轮询次数、最终任务状态
 - `first_task_status`：首次查询到的任务状态（`status_queued_or_running` 据此校验）
