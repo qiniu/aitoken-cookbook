@@ -26,8 +26,10 @@
 （`hashlib`/`hmac`）实现火山 V4 签名，每次请求前注入 4 个头：
 `Content-Type` / `X-Date` / `X-Content-Sha256` / `Authorization`。
 
-固定 `region=cn-beijing`、`service=ark`，派生签名密钥的种子直接用 SK（BytePlus
-风格）。签名所覆盖的头固定为 `content-type;host;x-content-sha256;x-date`。
+`service` 固定为 `ark`；`region` 从请求 host 推断，例如
+`ark.ap-southeast-1.byteplusapi.com` 使用 `ap-southeast-1`，无法识别的代理域名
+回退 `cn-beijing`。派生签名密钥的种子直接用 SK（BytePlus 风格）。签名所覆盖的头
+固定为 `content-type;host;x-content-sha256;x-date`。
 
 ## 校验方式
 

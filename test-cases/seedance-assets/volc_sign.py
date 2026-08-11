@@ -5,8 +5,9 @@
 Signature V4 算法逐字段计算签名头，供 run_tests.py 在每次请求前注入：
   X-Date / X-Content-Sha256 / Authorization（外加固定的 Content-Type）。
 
-固定 region=cn-beijing、service=ark。派生签名密钥的种子直接用 SK（BytePlus
-风格，非 AWS 的 "AWS4"+sk 前缀）。签名所覆盖的头固定为：
+service 固定为 ark；region 从请求 host 推断，无法识别时回退 cn-beijing。
+派生签名密钥的种子直接用 SK（BytePlus 风格，非 AWS 的 "AWS4"+sk 前缀）。
+签名所覆盖的头固定为：
   content-type;host;x-content-sha256;x-date
 
 注意：签名依赖真实 UTC 时间戳（X-Date），与时间强相关；signed_headers 的顺序
@@ -20,8 +21,8 @@ import hmac
 import urllib.parse
 from datetime import datetime, timezone
 
-# 固定区域与服务（与素材资产 API 一致）
-REGION = "cn-beijing"
+# 默认区域与固定服务（与素材资产 API 一致）
+DEFAULT_REGION = "cn-beijing"
 SERVICE = "ark"
 
 # 参与签名的头（固定顺序，分号分隔）
@@ -55,6 +56,29 @@ def _canonical_query(raw_query: str) -> str:
     return "&".join(f"{_rfc3986_escape(k)}={_rfc3986_escape(v)}" for k, v in pairs)
 
 
+def _ark_region_from_host(host: str) -> str:
+    """从 ark.<region>.byteplusapi.com / volces.com host 推断签名 region。"""
+    try:
+        hostname = urllib.parse.urlparse(f"//{host}").hostname
+    except ValueError:
+        return DEFAULT_REGION
+    if not hostname:
+        return DEFAULT_REGION
+
+    hostname = hostname.lower()
+    prefix = "ark."
+    if not hostname.startswith(prefix):
+        return DEFAULT_REGION
+
+    rest = hostname.removeprefix(prefix)
+    for suffix in (".byteplusapi.com", ".volces.com"):
+        if rest.endswith(suffix):
+            region = rest.removesuffix(suffix)
+            if region and "." not in region:
+                return region
+    return DEFAULT_REGION
+
+
 def sign_headers(
     *,
     access_key: str,
@@ -82,6 +106,7 @@ def sign_headers(
     if now is None:
         now = datetime.now(timezone.utc)
 
+    region = _ark_region_from_host(host)
     x_date = now.strftime("%Y%m%dT%H%M%SZ")
     short_date = now.strftime("%Y%m%d")
     body_hash = _sha256_hex(body)
@@ -103,7 +128,7 @@ def sign_headers(
         f"{body_hash}"
     )
 
-    credential_scope = f"{short_date}/{REGION}/{SERVICE}/request"
+    credential_scope = f"{short_date}/{region}/{SERVICE}/request"
     string_to_sign = (
         "HMAC-SHA256\n"
         f"{x_date}\n"
@@ -113,7 +138,7 @@ def sign_headers(
 
     # 派生签名密钥：SK 直接作种子（BytePlus 风格）
     k_date = _hmac_sha256(secret_key.encode("utf-8"), short_date)
-    k_region = _hmac_sha256(k_date, REGION)
+    k_region = _hmac_sha256(k_date, region)
     k_service = _hmac_sha256(k_region, SERVICE)
     k_signing = _hmac_sha256(k_service, "request")
     signature = hmac.new(k_signing, string_to_sign.encode("utf-8"), hashlib.sha256).hexdigest()
