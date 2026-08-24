@@ -19,6 +19,7 @@
 各覆盖一组：
 
 - 基础连通性
+- `background=transparent` 回显及 PNG 真实透明像素
 - `size` / `quality` 参数回显
 - `output_tokens` 精确校验（low=196 / medium=1756 / high=7024，均 1024x1024）
 
@@ -26,6 +27,10 @@
 端点需要一张输入图片，默认用 [fixtures/input.png](fixtures/input.png)（一张
 1024x1024 的纯色合成 PNG，可在 cases.yaml 顶部的 `edit_image` 或单个 case 的
 `image` 字段中替换为真实图片）。
+
+透明背景校验合并在 `gen_connectivity_basic`，不会额外增加生图请求。该用例不仅
+检查响应中的 `background` 回显，还会解码 PNG 扫描线，确认至少存在一个
+`alpha < 255` 的真实透明像素。
 
 ## 依赖
 
