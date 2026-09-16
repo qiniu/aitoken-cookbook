@@ -1,0 +1,114 @@
+# MiniMax H3 视频生成兼容性测试用例
+# 权威来源：docs/minimax-h3.md
+
+prompt: "一只橘猫在阳光下的草地上慵懒地打哈欠，镜头缓缓推近"
+first_frame_url: "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/H3_AA_I2VA/gallery/sr_v17_variants_seed42_43_20260724/inputs/4a3a90bf9100_KDmcbkhzYo5sjjxr9FqcVmWVnzb.png"
+# 文档只提供一张公开图片，首尾帧用例复用该合法素材。
+last_frame_url: "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/H3_AA_I2VA/gallery/sr_v17_variants_seed42_43_20260724/inputs/4a3a90bf9100_KDmcbkhzYo5sjjxr9FqcVmWVnzb.png"
+reference_image_url: "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/H3_AA_I2VA/gallery/sr_v17_variants_seed42_43_20260724/inputs/4a3a90bf9100_KDmcbkhzYo5sjjxr9FqcVmWVnzb.png"
+reference_video_url: "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/h3_promo_eval_ref2va/gallery/sr_v2p26_trio_seed42_20260724/inputs/297573323635_00_%E8%A7%86%E9%A2%911_YnyRbxEwio_video_20260525_163755_1927e9d3.mp4"
+reference_audio_url: "https://cdn.hailuoai.com/prod/hailuo_demo/testsets/h3_promo_eval_ref2va/gallery/sr_v2p26_trio_seed42_20260724/inputs/f463d523c5ce_01_%E9%9F%B3%E9%A2%911_RSLcbpzJPo_6%E6%9C%885%E6%97%A5(1).mp3"
+
+resolution: 768P
+duration: 5
+ratio: adaptive
+poll_interval: 5
+poll_timeout: 1200
+
+# 通用成功态校验：每个收费正向任务都验证创建、查询、成功终态和核心计费字段。
+_common_success_checks: &common_success_checks
+  - create_status_200
+  - create_schema
+  - query_status_200
+  - query_schema
+  - reached_succeeded
+  - succeeded_schema
+  - task_id_matches
+  - task_model_matches
+  - task_resolution_matches
+  - task_duration_matches
+  - task_ratio_matches_semantics
+  - task_generation_video
+  - usage_billing_matches_request
+
+cases:
+  - id: t2v_full
+    name: 文生视频 Profile 核心能力
+    scenario: text_to_video
+    checks: *common_success_checks
+    profile_overrides:
+      minimax-h3:
+        resolution: 2K
+        duration: 4
+        ratio: "16:9"
+      minimax-h3-max:
+        resolution: 480P
+        duration: 5
+        ratio: "16:9"
+        extra:
+          prompt_expansion_mode: quality
+
+  - id: i2v_first_frame
+    name: 图生视频-首帧
+    scenario: image_to_video
+    duration: 15
+    ratio: adaptive
+    checks: *common_success_checks
+
+  - id: start_end_frames
+    name: 图生视频-首尾帧
+    scenario: start_end_to_video
+    ratio: adaptive
+    checks: *common_success_checks
+
+  - id: multimodal_reference
+    name: 多模态参考生视频（图片 + 视频 + 音频）
+    scenario: multimodal_reference
+    prompt: "参考图片中的主体、视频中的镜头运动和音频中的音色，生成一段连贯视频"
+    ratio: adaptive
+    checks: *common_success_checks
+
+  - id: missing_prompt_error
+    name: 缺少非空 prompt 应返回参数错误
+    scenario: text_to_video
+    prompt: ""
+    ratio: "16:9"
+    expected_http_status: 400
+    checks:
+      - create_error_status
+      - error_schema
+      - error_http_code_matches_status
+
+  - id: invalid_model_error
+    name: 非法模型应返回 OpenAI 风格错误
+    scenario: text_to_video
+    model: MiniMax-H3-Does-Not-Exist
+    ratio: "16:9"
+    expected_http_status: 400
+    checks:
+      - create_error_status
+      - error_schema
+      - error_http_code_matches_status
+
+  - id: t2v_adaptive_ratio_error
+    name: 文生视频使用 adaptive 比例应被拒绝
+    scenario: text_to_video
+    ratio: adaptive
+    expected_http_status: 400
+    checks:
+      - create_error_status
+      - error_schema
+      - error_http_code_matches_status
+
+  - id: h3_max_2k_error
+    name: MiniMax-H3-Max 不支持 2K
+    profiles: [minimax-h3-max]
+    scenario: text_to_video
+    resolution: 2K
+    duration: 5
+    ratio: "16:9"
+    expected_http_status: 400
+    checks:
+      - create_error_status
+      - error_schema
+      - error_http_code_matches_status

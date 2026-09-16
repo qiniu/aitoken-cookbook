@@ -28,6 +28,13 @@ test-cases/
 │   ├── run_tests.py         # 执行入口（异步：创建任务 + 轮询查询）
 │   ├── schemas/             # 火山格式响应体 JSON Schema（结构契约）
 │   └── reports/             # 运行结果输出目录（git 忽略）
+├── minimax-h3/              # MiniMax H3/H3-Max 视频生成 V2 兼容测试
+│   ├── README.md            # 能力矩阵、用例和运行说明
+│   ├── cases.yaml           # 核心多模态场景与负向用例
+│   ├── profiles.yaml        # MiniMax-H3 / MiniMax-H3-Max 能力档案
+│   ├── run_tests.py         # 异步创建、轮询与报告入口
+│   ├── schemas/             # 创建、查询、错误响应 JSON Schema
+│   └── reports/             # 运行结果输出目录（git 忽略）
 ├── seedance-assets/         # Seedance 素材资产 API 火山兼容测试（AK/SK 签名 + Action 风格）
 │   ├── README.md            # 该模型的测试说明
 │   ├── cases.yaml           # 用例定义（虚拟人像生命周期链 + 真人会话 + 负向用例）
@@ -89,6 +96,14 @@ python run_tests.py --model ep-custom-seedance-prod --profile seedance-2.5
 ```
 
 具体 profile 取值与使用方式见 [Seedance 测试说明](seedance/README.md#运行)。
+
+MiniMax H3 同样通过 profile 区分标准版与极速版能力：
+
+```bash
+cd test-cases/minimax-h3
+python run_tests.py --profile minimax-h3 --dry-run
+python run_tests.py --profile minimax-h3-max --dry-run
+```
 
 运行完成后，结果会输出到 `reports/` 目录，每次运行同时产出三种格式（见下文）。
 

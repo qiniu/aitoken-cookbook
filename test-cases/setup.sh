@@ -58,12 +58,26 @@ else
   "$PYTHON" -m venv "$VENV_DIR"
 fi
 
-# 在虚拟环境内升级 pip 并安装依赖
+# 在虚拟环境内安装依赖。部分精简 Linux 镜像的 venv 不包含 ensurepip，
+# 此时使用系统 Python 的 pip 直接写入虚拟环境 site-packages。
 VENV_PY="${VENV_DIR}/bin/python"
-echo "==> upgrading pip"
-"$VENV_PY" -m pip install --upgrade pip >/dev/null
-echo "==> installing dependencies from requirements.txt"
-"$VENV_PY" -m pip install -r "$REQUIREMENTS"
+if "$VENV_PY" -m pip --version >/dev/null 2>&1; then
+  echo "==> upgrading pip"
+  "$VENV_PY" -m pip install --upgrade pip >/dev/null
+  echo "==> installing dependencies from requirements.txt"
+  "$VENV_PY" -m pip install -r "$REQUIREMENTS"
+else
+  if ! "$PYTHON" -m pip --version >/dev/null 2>&1; then
+    echo "error: venv 和系统 Python 均没有 pip，请先安装 python3-pip / python3-venv" >&2
+    exit 1
+  fi
+  VENV_SITE="$($VENV_PY -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+  echo "==> venv has no pip; installing dependencies with system pip into ${VENV_SITE}"
+  "$PYTHON" -m pip install --target "$VENV_SITE" -r "$REQUIREMENTS"
+fi
+
+echo "==> verifying test dependencies"
+"$VENV_PY" -c 'import yaml, jsonschema; print("dependencies OK")'
 
 echo ""
 echo "Done. Activate the virtual environment with:"

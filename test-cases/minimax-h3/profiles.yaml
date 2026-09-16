@@ -1,0 +1,15 @@
+# MiniMax H3 系列能力档案，来源：docs/minimax-h3.md
+profiles:
+  minimax-h3:
+    default_model: MiniMax-H3
+    resolutions: [768P, 2K]
+    min_duration: 4
+    max_duration: 15
+    prompt_expansion_modes: []
+
+  minimax-h3-max:
+    default_model: MiniMax-H3-Max
+    resolutions: [480P, 768P]
+    min_duration: 5
+    max_duration: 15
+    prompt_expansion_modes: [disabled, balanced, quality]

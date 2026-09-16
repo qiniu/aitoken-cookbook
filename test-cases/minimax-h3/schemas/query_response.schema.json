@@ -1,0 +1,113 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minimax-h3/query_response.schema.json",
+  "title": "MiniMax H3 查询视频任务响应",
+  "type": "object",
+  "required": [
+    "task"
+  ],
+  "properties": {
+    "task": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "running",
+            "succeeded",
+            "failed",
+            "cancelled"
+          ]
+        },
+        "error": {
+          "type": "object",
+          "required": [
+            "code",
+            "message"
+          ],
+          "properties": {
+            "code": {
+              "type": "string"
+            },
+            "message": {
+              "type": "string"
+            }
+          }
+        },
+        "created_at": {
+          "type": "integer"
+        },
+        "updated_at": {
+          "type": "integer"
+        },
+        "content": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string",
+              "minLength": 1
+            },
+            "prompt": {
+              "type": "string"
+            }
+          }
+        },
+        "resolution": {
+          "type": "string"
+        },
+        "duration": {
+          "type": "integer"
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "total_seconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "input_seconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "output_seconds": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "input_image_count": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "input_audio_seconds": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "ratio": {
+          "type": "string"
+        },
+        "task_type": {
+          "enum": [
+            "generation",
+            "h3_context_ir",
+            "regeneration"
+          ]
+        },
+        "modality": {
+          "enum": [
+            "video",
+            "text"
+          ]
+        }
+      }
+    }
+  }
+}

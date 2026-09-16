@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "minimax-h3/create_response.schema.json",
+  "title": "MiniMax H3 创建视频任务响应",
+  "type": "object",
+  "required": ["task_id"],
+  "properties": {
+    "task_id": {"type": "string", "minLength": 1}
+  }
+}
