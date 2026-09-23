@@ -7,8 +7,8 @@
     "start": "tsx gemini_basic.ts"
   },
   "dependencies": {
-    "@ai-sdk/google-vertex": "^4.0.108",
-    "ai": "^6.0.158"
+    "@ai-sdk/google-vertex": "^4.0.197",
+    "ai": "^6.0.277"
   },
   "devDependencies": {
     "@types/node": "^25.6.0",
