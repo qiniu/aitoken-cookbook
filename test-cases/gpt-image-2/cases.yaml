@@ -19,7 +19,9 @@
 #   output_tokens_exact usage.output_tokens 等于计算器算出的预期值
 #   size_echo           响应 size 与请求 size 一致
 #   quality_echo        响应 quality 与请求 quality 一致
+#   background_echo     响应 background 与请求 background 一致
 #   image_size_actual   解码返回图片读 PNG 真实像素宽高，与请求 size 一致（非仅看回显）
+#   image_has_transparent_pixel 解码 PNG 像素并确认至少存在一个 alpha < 255 的透明像素
 
 # 文生图（generations）默认提示词
 prompt: "生成一只小猫在草地上"
@@ -31,11 +33,14 @@ edit_image: fixtures/input.png
 cases:
   # ---------- generations：文生图 ----------
   - id: gen_connectivity_basic
-    name: generations 基础连通性（low 1024x1024）
+    name: generations 基础连通性与透明背景（low 1024x1024）
     endpoint: generations
     quality: low
     size: "1024x1024"
-    checks: [status_200, data_exists, usage_exists, image_size_actual]
+    prompt: "生成一个居中的红色圆形图标，图标以外区域必须完全透明，不要背景、阴影或文字"
+    background: transparent
+    output_format: png
+    checks: [status_200, data_exists, usage_exists, background_echo, image_size_actual, image_has_transparent_pixel]
 
   - id: gen_size_echo_1024
     name: generations size 参数回显（1024x1024）

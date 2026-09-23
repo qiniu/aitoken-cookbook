@@ -30,10 +30,12 @@ import base64
 import importlib.util
 import json
 import os
+import struct
 import sys
 import time
 import urllib.error
 import urllib.request
+import zlib
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
@@ -141,6 +143,76 @@ def read_png_size(image_bytes: bytes) -> tuple[int, int]:
     return width, height
 
 
+def png_has_transparent_pixel(image_bytes: bytes) -> bool:
+    """解码常见的 8-bit 非交错 PNG，并判断是否存在 alpha < 255 的像素。"""
+    if len(image_bytes) < 33 or image_bytes[:8] != PNG_SIGNATURE:
+        raise ValueError("返回图片不是 PNG 格式（签名不匹配）")
+
+    position = 8
+    ihdr = None
+    idat_parts: list[bytes] = []
+    while position + 12 <= len(image_bytes):
+        length = struct.unpack(">I", image_bytes[position:position + 4])[0]
+        chunk_type = image_bytes[position + 4:position + 8]
+        chunk_data = image_bytes[position + 8:position + 8 + length]
+        position += length + 12
+        if chunk_type == b"IHDR":
+            ihdr = struct.unpack(">IIBBBBB", chunk_data)
+        elif chunk_type == b"IDAT":
+            idat_parts.append(chunk_data)
+        elif chunk_type == b"IEND":
+            break
+
+    if ihdr is None or not idat_parts:
+        raise ValueError("PNG 缺少 IHDR 或 IDAT 块")
+
+    width, height, bit_depth, color_type, _, _, interlace = ihdr
+    channels = {4: 2, 6: 4}.get(color_type)
+    if channels is None:
+        return False
+    if bit_depth != 8 or interlace != 0:
+        raise ValueError("透明像素校验仅支持 8-bit 非交错灰度+alpha 或 RGBA PNG")
+
+    stride = width * channels
+    decoded = zlib.decompress(b"".join(idat_parts))
+    expected_length = height * (stride + 1)
+    if len(decoded) != expected_length:
+        raise ValueError("PNG 解压后的扫描线长度不匹配")
+
+    previous = bytearray(stride)
+    offset = 0
+    for _ in range(height):
+        filter_type = decoded[offset]
+        offset += 1
+        row = bytearray(decoded[offset:offset + stride])
+        offset += stride
+        for index in range(stride):
+            left = row[index - channels] if index >= channels else 0
+            above = previous[index]
+            upper_left = previous[index - channels] if index >= channels else 0
+            if filter_type == 1:
+                row[index] = (row[index] + left) & 0xFF
+            elif filter_type == 2:
+                row[index] = (row[index] + above) & 0xFF
+            elif filter_type == 3:
+                row[index] = (row[index] + (left + above) // 2) & 0xFF
+            elif filter_type == 4:
+                predictor = left + above - upper_left
+                distances = (
+                    abs(predictor - left),
+                    abs(predictor - above),
+                    abs(predictor - upper_left),
+                )
+                nearest = (left, above, upper_left)[distances.index(min(distances))]
+                row[index] = (row[index] + nearest) & 0xFF
+            elif filter_type != 0:
+                raise ValueError(f"PNG 包含未知过滤器：{filter_type}")
+        if any(alpha < 255 for alpha in row[channels - 1::channels]):
+            return True
+        previous = row
+    return False
+
+
 def get_path(obj, path: str):
     """按点号路径取嵌套字段，缺失返回 None。"""
     cur = obj
@@ -174,15 +246,20 @@ def build_url(base_url: str, endpoint: str) -> str:
     return base_url.rstrip("/").removesuffix("/v1") + ENDPOINT_PATHS[endpoint]
 
 
-def build_gen_body(model: str, prompt: str, quality: str, size: str) -> dict:
+def build_gen_body(model: str, prompt: str, quality: str, size: str,
+                   request_options: dict | None = None) -> dict:
     """构造文生图（generations）的 JSON 请求体。"""
-    return {
+    body = {
         "model": model,
         "prompt": prompt,
         "quality": quality,
         "size": size,
         "n": 1,
     }
+    for key in ("background", "output_format"):
+        if request_options and request_options.get(key) is not None:
+            body[key] = request_options[key]
+    return body
 
 
 def build_edit_fields(model: str, prompt: str, quality: str, size: str) -> dict:
@@ -293,6 +370,22 @@ def run_checks(checks: list[str], status: int, resp: dict,
             if actual_quality != req["quality"]:
                 return "fail", f"quality 期望 {req['quality']}，实际 {actual_quality}", req["quality"], actual_quality
 
+        elif check == "background_echo":
+            actual_background = resp.get("background")
+            if actual_background != req.get("background"):
+                return "fail", (
+                    f"background 期望 {req.get('background')}，实际 {actual_background}"
+                ), req.get("background"), actual_background
+
+        elif check == "image_has_transparent_pixel":
+            try:
+                image_bytes = extract_image_bytes(resp, timeout)
+                has_transparent_pixel = png_has_transparent_pixel(image_bytes)
+            except ValueError as exc:
+                return "fail", f"透明像素校验失败：{exc}", True, None
+            if not has_transparent_pixel:
+                return "fail", "返回 PNG 不包含透明像素", True, False
+
         elif check == "image_size_actual":
             # 不只看响应体回显，而是解码真实图片、读 PNG 头拿到真实像素宽高再比对
             expected_size = req["size"]
@@ -341,6 +434,9 @@ def run_case(case: dict, *, calc, config: dict, model: str, base_url: str,
     expected_tokens = calc.calculate_output_tokens(width, height, quality)
 
     req = {"quality": quality, "size": size}
+    for key in ("background", "output_format"):
+        if case.get(key) is not None:
+            req[key] = case[key]
     api_url = build_url(base_url, endpoint) if base_url else ""
 
     if dry_run:
@@ -360,7 +456,8 @@ def run_case(case: dict, *, calc, config: dict, model: str, base_url: str,
     timeout = int(case.get("timeout", 300))
     try:
         if endpoint == "generations":
-            sent_body = build_gen_body(model, config["prompt"], quality, size)
+            prompt = case.get("prompt", config["prompt"])
+            sent_body = build_gen_body(model, prompt, quality, size, case)
             data = json.dumps(sent_body).encode("utf-8")
             content_type = "application/json"
             request_detail = {"url": api_url, "body": sent_body}
