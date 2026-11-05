@@ -268,7 +268,8 @@ def check_outputs(task, case, body, schemas):
                     f"视频时长不匹配：预期 {expected}，实际 {duration}")
         if body.get("options", {}).get("watermark_info", {}).get("enabled"):
             require(is_http_url(video.get("watermark_url", "")), "开启水印后未返回有效 watermark_url")
-    # 文档规定 usage 在有用量时返回，不为无视频输入任务编造 token 或秒数公式。
+    # 官方 usage 仅定义可选 input_duration；输出时长已按 outputs[].duration 校验。
+    # 网关扩展字段（如 output_duration）仅记录，不作为官方协议的通过条件。
     usage = task.get("usage")
     if usage and "input_duration" in usage:
         require(number(usage["input_duration"], "输入视频时长") > 0, "输入视频时长应大于0")
@@ -334,6 +335,12 @@ def run_case(case, *, config, schemas, base_url, api_key, model, run_id,
             require(is_http_url(video["url"]), "生成结果不是HTTP(S)视频链接")
         details["videos"] = [{"video_url": item["url"], "duration": item["duration"],
                               "watermark_video_url": item.get("watermark_url")} for item in videos]
+        # 与 MiniMax 一致，顶层媒体字段供公共 HTML 报告直接预览。
+        for index, video in enumerate(videos, start=1):
+            suffix = "" if index == 1 else f"_{index}"
+            details[f"video_url{suffix}"] = video["url"]
+            if video.get("watermark_url"):
+                details[f"watermark_video_url{suffix}"] = video["watermark_url"]
         details["media_checks"] = (
             "自动校验接口返回的视频链接与时长；实际分辨率、画幅、帧率、时长、可播放性及画面效果待人工验收"
         )
@@ -351,14 +358,16 @@ def run_case(case, *, config, schemas, base_url, api_key, model, run_id,
 
 
 
-def report_value(value, api_key):
-    """先脱敏再截断，防止错误响应或回显请求泄露密钥。"""
+def report_value(value, api_key, *, field=""):
+    """先脱敏；媒体链接保留完整，其余长文本截断，避免 Base64 撑大报告。"""
     if isinstance(value, str):
         if api_key:
             value = value.replace(api_key, "[密钥已隐藏]")
+        if field.startswith(("video_url", "watermark_video_url")) and value.startswith(("http://", "https://")):
+            return value
         return value if len(value) <= 1000 else value[:1000] + f"…（共{len(value)}字符）"
     if isinstance(value, dict):
-        return {key: report_value(item, api_key) for key, item in value.items()}
+        return {key: report_value(item, api_key, field=key) for key, item in value.items()}
     if isinstance(value, list):
         return [report_value(item, api_key) for item in value]
     return value

@@ -103,9 +103,11 @@ python test-cases/kling-v4/run_tests.py --case '*_error'
 
 自动检测基于 HTTP 响应，返回的 `duration` 与预期时长允许0.1秒偏差。当前可灵响应契约未要求回显分辨率、画幅比例与帧率，这些参数保留在请求中用于覆盖，不作为已通过的自动检测项。视频及水印链接检查地址格式，不下载输出视频或读取实际媒体流。
 
+用量校验与 Seedance、MiniMax 一样，以各自协议定义为准：Seedance 检查 `completion_tokens` / `total_tokens`，MiniMax 检查输入/输出秒数与输入图片数。可灵官方查询响应仅定义可选的 `usage.input_duration`（输入视频总时长，两位小数字符串），返回时检查格式及大于0；未定义 `usage.output_duration`，兼容网关返回该扩展字段时仅记录，不作为通过条件。输出时长始终校验 `outputs[].duration`。
+
 实际分辨率、画幅比例、时长、Omni的24fps、可播放性，以及画面遵循、关键帧过渡、参考融合和编辑效果，通过用例的 `review` 清单人工验收。接口通过不等于实际媒体参数或画面质量已通过，报告将人工验收状态保留为 `pending`。
 
-默认输出 `reports/report.json`、`reports/report.md`、`reports/report.html`，全量运行记录7个用例；可用 `--out` 更换目录。内容包含正/负向分类、预期与实际结果、请求、轮询历史、最终响应、计费、视频链接和人工检查项，密钥脱敏、长字符串截断。
+默认输出 `reports/report.json`、`reports/report.md`、`reports/report.html`，全量运行记录7个用例；可用 `--out` 更换目录。内容包含正/负向分类、预期与实际结果、请求、轮询历史、最终响应、计费、视频链接和人工检查项。密钥脱敏，原始请求/响应中的长字符串截断；视频及水印链接单独完整保存在 `details.video_url` / `details.watermark_video_url`（多个产物追加 `_2` 等序号），HTML 报告可直接预览，处理方式与 MiniMax 一致。
 
 全部所选用例通过返回0；失败、执行异常或跳过返回1；命令行与提交前完整性预检错误返回2。
 

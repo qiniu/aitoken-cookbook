@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import copy
+import html
 import json
+import tempfile
 import threading
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -280,6 +282,26 @@ class RunnerTests(unittest.TestCase):
             ]):
                 self.assertEqual(self.run_case().status, "fail")
 
+    def test_usage_only_validates_official_fields(self):
+        updates = [{}, {"usage": {}}, {"usage": {"input_duration": "8.03"}}]
+        updates += [{"usage": {"input_duration": "8.03", "output_duration": value}}
+                    for value in (None, {}, "-1", "30")]
+        for update in updates:
+            with self.subTest(update=update), patch.object(runner, "send_request", side_effect=[
+                (200, envelope(task("submitted"))), (200, envelope([{**task(), **update}])),
+            ]):
+                result = self.run_case()
+                self.assertEqual(result.status, "pass", result.error)
+                self.assertEqual(result.details["usage"], update.get("usage"))
+
+    def test_invalid_official_input_duration_fails(self):
+        for value in (None, {}, 8.03, "8", "8.0", "-1.00", "0.00"):
+            completed = {**task(), "usage": {"input_duration": value}}
+            with self.subTest(value=value), patch.object(runner, "send_request", side_effect=[
+                (200, envelope(task("submitted"))), (200, envelope([completed])),
+            ]):
+                self.assertEqual(self.run_case().status, "fail")
+
     def test_duration_mismatch_and_missing_watermark_fail(self):
         for case in ({**self.case, "settings": {"duration": 5}},
                      {**self.case, "options": {"watermark_info": {"enabled": True}}}):
@@ -324,6 +346,39 @@ class RunnerTests(unittest.TestCase):
         value = runner.report_value({"error": "echo:" + secret, "nested": [secret]}, secret)
         self.assertNotIn("key-", json.dumps(value))
         self.assertIn("密钥已隐藏", value["error"])
+        media = runner.report_value({"video_url": "https://example.test/video.mp4?key=" + secret}, secret)
+        self.assertNotIn(secret, media["video_url"])
+        self.assertIn("密钥已隐藏", media["video_url"])
+
+    def test_report_preserves_long_media_urls_and_renders_previews(self):
+        case = {**self.case, "options": {"watermark_info": {"enabled": True}}}
+        completed = task()
+        completed["outputs"] = [
+            {"type": "video", "id": f"video-{index}", "duration": "3",
+             "url": f"https://example.test/video-{index}.mp4?signature=" + "a" * 1200 + "&expires=123",
+             "watermark_url": f"https://example.test/watermark-{index}.mp4?signature=" + "b" * 1200 + "&expires=123"}
+            for index in (1, 2)
+        ]
+        with patch.object(runner, "send_request", side_effect=[
+            (200, envelope(task("submitted"))), (200, envelope([completed])),
+        ]):
+            result = self.run_case(case)
+        self.assertEqual(result.status, "pass", result.error)
+        result.details["create_body"]["data"] = "data:image/png;base64," + "c" * 2000
+        result.details = runner.report_value(result.details, "secret")
+        report = runner.Report(model="kling-4.0", cases=[result])
+        with tempfile.TemporaryDirectory() as directory:
+            paths = report.write(directory)
+            details = json.loads(paths["json"].read_text())["cases"][0]["details"]
+            rendered = paths["html"].read_text()
+        self.assertEqual(rendered.count("<video "), 4)
+        self.assertLess(len(details["create_body"]["data"]), 1100)
+        for index, video in enumerate(completed["outputs"], start=1):
+            suffix = "" if index == 1 else f"_{index}"
+            for field, source in (("video_url", "url"), ("watermark_video_url", "watermark_url")):
+                self.assertEqual(details[field + suffix], video[source])
+                self.assertEqual(details["videos"][index - 1][field], video[source])
+                self.assertIn(f'<video src="{html.escape(video[source])}"', rendered)
 
 
 class LocalHTTPTests(unittest.TestCase):
