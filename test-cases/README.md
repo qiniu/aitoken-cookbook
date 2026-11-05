@@ -35,6 +35,12 @@ test-cases/
 │   ├── run_tests.py         # 异步创建、轮询与报告入口
 │   ├── schemas/             # 创建、查询、错误响应 JSON Schema
 │   └── reports/             # 运行结果输出目录（git 忽略）
+├── kling-v4/                # Kling 4.0 官方新版协议视频能力测试
+│   ├── README.md            # 协议版本、合并覆盖矩阵与运行说明
+│   ├── cases.yaml           # 五个生成场景、两个负向参数用例与响应检查
+│   ├── fixtures.example.yaml # 可选的图片、视频素材替换配置
+│   ├── run_tests.py         # 创建、轮询、响应校验与报告
+│   └── schemas/             # 创建、查询、计费、视频与错误响应契约
 ├── seedance-assets/         # Seedance 素材资产 API 火山兼容测试（AK/SK 签名 + Action 风格）
 │   ├── README.md            # 该模型的测试说明
 │   ├── cases.yaml           # 用例定义（虚拟人像生命周期链 + 真人会话 + 负向用例）
@@ -105,6 +111,13 @@ python run_tests.py --profile minimax-h3 --dry-run
 python run_tests.py --profile minimax-h3-max --dry-run
 ```
 
+Kling 4.0 使用官方新版模型路径，支持通过 `API_BASE_URL` 指向兼容网关；默认执行全部7个用例，素材缺失会在提交前报错，全部用例通过才返回成功。素材配置与完整覆盖说明见 [Kling 4.0 测试说明](kling-v4/README.md)：
+
+```bash
+python test-cases/kling-v4/run_tests.py --dry-run
+python test-cases/kling-v4/run_tests.py
+```
+
 运行完成后，结果会输出到 `reports/` 目录，每次运行同时产出三种格式（见下文）。
 
 ## 结果格式
@@ -125,7 +138,7 @@ JSON 顶层固定为 `model` / `summary` / `cases`；每个 case 的固定字段
 |------|------|
 | `id` | 用例唯一标识 |
 | `name` | 可读名称 |
-| `status` | `pass` / `fail` / `error` / `skipped`；`skipped` 为中性结果，不影响整体通过 |
+| `status` | `pass` / `fail` / `error` / `skipped`；公共报告将 `skipped` 作为中性结果，各执行器决定退出码，Kling 遇到跳过项返回非零 |
 | `expected` | 期望值 |
 | `actual` | 实际值 |
 | `error` | 执行报错信息（仅 error 状态） |

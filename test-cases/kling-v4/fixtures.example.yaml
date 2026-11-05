@@ -1,0 +1,33 @@
+# 默认已配置可灵及 Seedance 套件的公开素材，替换时使用 --fixtures 指定。
+# 删除不需要覆盖的键，避免空值覆盖默认素材。
+# 上限用例需10张图片和5段视频；每段视频至少3秒，五段合计不超过30秒。
+# 编辑用例的 edit_video 与 reference_video 总时长也不能超过30秒。
+fixtures:
+  first_frame: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-qa-test/file_size/person-ref-pad-2x3-2MB.jpg
+  middle_frame: https://p4-kling.klingai.com/kcdn/cdn-kcdn112452/chrome-plugin-upload/2026-10-13/1791892036356.caca59ef0c55e171.png
+  last_frame: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/chrome-plugin-upload/2026-10-13/1791892087071.f32f7a727b1832bf.png
+  reference_images:
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_dark_hair_fighter_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_silver_hair_fighter_ref.png
+  reference_video: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_fight_motion_source.mp4
+  edit_video: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_box_source.mp4
+  # 数量上限：10张不同图片 + 5段不同视频，共15项素材。
+  limit_reference_images:
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_window_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_paper_chair_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_floor_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_bed_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_dangling_feet.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_recorder_closeup.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_pink_pig_front_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_pink_pig_side_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_pink_pig_back_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_7_felt_picnic_style_ref.png
+  # 每段均为3～30秒，五段总时长约25.025秒；不得用长视频直接补足数量。
+  # 后四段复用 Seedance 套件的公开素材，仅作为可灵请求的输入视频。
+  limit_reference_videos:
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_fight_motion_source.mp4
+    - https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4
+    - https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference4.mp4
+    - https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference6.mp4
+    - https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference7.mp4
