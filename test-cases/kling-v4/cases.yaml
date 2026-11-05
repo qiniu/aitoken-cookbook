@@ -1,0 +1,111 @@
+# Kling 4.0 官方新版协议：5个生成场景 + 2个负向参数用例。
+# 正向合并能力与响应校验，负向每次只违反一条参数规则。
+# 官方依据与运行说明见 README。
+poll_interval: 5
+poll_timeout: 1800
+request_timeout: 60
+
+fixtures:
+  first_frame: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-qa-test/file_size/person-ref-pad-2x3-2MB.jpg
+  middle_frame: https://p4-kling.klingai.com/kcdn/cdn-kcdn112452/chrome-plugin-upload/2026-10-13/1791892036356.caca59ef0c55e171.png
+  last_frame: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/chrome-plugin-upload/2026-10-13/1791892087071.f32f7a727b1832bf.png
+  reference_images:
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_dark_hair_fighter_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_silver_hair_fighter_ref.png
+  reference_video: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_fight_motion_source.mp4
+  edit_video: https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_box_source.mp4
+  # 数量上限：10张不同图片 + 5段不同视频，共15项素材。
+  limit_reference_images:
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_window_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_paper_chair_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_floor_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_bed_pose.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_dangling_feet.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_9_mint_recorder_closeup.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_pink_pig_front_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_pink_pig_side_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_6_pink_pig_back_ref.png
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_7_felt_picnic_style_ref.png
+  # 每段均为3～30秒，五段总时长约25.025秒；不得用长视频直接补足数量。
+  # 后四段复用 Seedance 套件的公开素材，仅作为可灵请求的输入视频。
+  limit_reference_videos:
+    - https://p2-kling.klingai.com/kcdn/cdn-kcdn112452/kling-tob-release-note/ch12_2_fight_motion_source.mp4
+    - https://ark-project.tos-cn-beijing.volces.com/doc_video/r2v_tea_video1.mp4
+    - https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference4.mp4
+    - https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference6.mp4
+    - https://arkdocs.tos-cn-beijing.volces.com/videos/video-generation/seedance2.5_reference7.mp4
+
+cases:
+  - id: t2v_full
+    name: 文生视频（30秒、1080p、21:9、水印与分段叙事）
+    endpoint: text-to-video
+    prompt: 电影风格宽屏短片。前十秒全景展示一位店员走入花店并整理花束；中间十秒镜头推近，展示她挑选鲜花、整理花束的细节；最后十秒跟随她将花束递给顾客。保持人物服装与场景一致，动作自然，镜头过渡流畅。
+    settings: {duration: 30, resolution: 1080p, aspect_ratio: '21:9'}
+    options: {watermark_info: {enabled: true}}
+    review: [实际1080p与21:9画幅, 实际30秒时长与可播放性, 分段事件顺序, 长视频连贯性, 镜头过渡, 水印版本可播放]
+
+  - id: start_end_frames
+    name: 首尾帧生视频（3秒、720p、Base64与URL混合输入）
+    endpoint: image-to-video
+    prompt: 从首帧姿势自然过渡到尾帧姿势，保持人物面孔、衣着与场景一致，身体动作连贯，避免跳变。
+    inputs:
+      - {type: first_frame, fixture: first_frame, encoding: base64}
+      - {type: last_frame, fixture: last_frame}
+    settings: {duration: 3, resolution: 720p}
+    review: [实际720p与3秒时长, 视频可播放, 首尾画面匹配, 中间过渡合理, 无肢体畸变]
+
+  - id: multi_keyframes
+    name: 多关键帧生视频（首帧、中间帧、尾帧与默认参数）
+    endpoint: image-to-video
+    prompt: 依次从 @first_frame_1 的姿态过渡到 @middle_frame_1，最后到达 @last_frame_1 的姿态。各段动作自然衔接，保持人物面孔、服装、光线与场景一致。
+    inputs:
+      - {type: first_frame, fixture: first_frame}
+      - {type: middle_frame, fixture: middle_frame}
+      - {type: last_frame, fixture: last_frame}
+    expected_duration: 10
+    review: [默认1080p与实际10秒时长, 视频可播放, 关键帧顺序, 关键姿态还原, 动作衔接]
+
+  - id: omni_reference
+    name: 多模态参考数量上限（10张参考图、5段参考视频、15项素材）
+    endpoint: omni-video
+    prompt: >-
+      生成一段连贯的玩偶野餐短片。@refer_image_1、@refer_image_2、@refer_image_3、@refer_image_4、@refer_image_5、@refer_image_6
+      提供同一女孩的面容、薄荷绿服饰与姿态参考；@refer_image_7、@refer_image_8、@refer_image_9 提供同一粉色小猪的多视角外观；
+      @refer_image_10 提供毛毡野餐场景与材质风格。将女孩和小猪转为毛毡玩偶，保留各自造型特征，
+      从坐着聊天过渡到起身摆放野餐物品，保持外观一致。
+      综合参考 @feature_video_1、@feature_video_2、@feature_video_3、@feature_video_4、@feature_video_5 的镜头运动与节奏，
+      让镜头从全景平稳推近到双人中景；动作轻柔，不复制视频中的人物、物品或背景。
+    inputs:
+      - {type: refer_image, fixture: limit_reference_images, count: 10}
+      - {type: feature_video, fixture: limit_reference_videos, count: 5}
+    settings: {duration: 5, resolution: 720p, aspect_ratio: '1:1'}
+    review: [实际720p与1:1画幅, 实际5秒时长与24fps, 视频可播放, 两角色外观保持, 多视角图片融合, 毛毡野餐场景与材质, 多视频运镜与节奏参考]
+
+  - id: omni_edit
+    name: 视频编辑（待编辑视频、参考图、参考视频、1080p与adaptive）
+    endpoint: omni-video
+    prompt: 编辑 @base_video_1，将视频中的箱子改成红色；参考 @refer_image_1 的暖色光线，以及 @feature_video_1 的画面对比度和色彩层次。保留原视频人物、场景布局、镜头运动和动作节奏，保持箱子以外物体的形状与位置。
+    inputs:
+      - {type: base_video, fixture: edit_video}
+      - {type: refer_image, fixture: reference_images}
+      - {type: feature_video, fixture: reference_video}
+    settings: {duration: 10, resolution: 1080p, aspect_ratio: adaptive}
+    review: [实际1080p与自适应画幅, 实际10秒时长与24fps, 视频可播放, 箱子颜色修改准确, 参考图光线与参考视频色彩融合, 非编辑物体形状与位置保持, 原有运动保留]
+
+  - id: missing_prompt_error
+    name: 文生缺少提示词，应返回参数错误
+    endpoint: text-to-video
+    prompt: 一只橘猫缓缓走过草地。
+    settings: {duration: 3, resolution: 720p, aspect_ratio: '16:9'}
+    omit: [prompt]
+    expected_error: &parameter_error
+      http_status: 400
+      codes: [1200, 1201]
+
+  - id: invalid_duration_error
+    name: 图生时长超过30秒，应返回参数错误
+    endpoint: image-to-video
+    prompt: 以首帧为起点，人物自然转头，保持衣着和场景不变。
+    inputs: [{type: first_frame, fixture: first_frame}]
+    settings: {duration: 31, resolution: 720p}
+    expected_error: *parameter_error
